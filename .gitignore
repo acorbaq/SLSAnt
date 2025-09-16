@@ -1,31 +1,59 @@
-# Dependencias de Composer
+# Node / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build outputs (compilados)
+public/assets/
+assets/dist/
+dist/
+build/
+.cache/
+
+# Tailwind / PostCSS cache
+.postcss-cache/
+
+# PHP / Composer
 /vendor/
+vendor/
 composer.lock
+*.log
+**/logs/
 
-# Entorno
+# Entorno / Environment files
 .env
+.env.*.local
+.env.local
 
-# Base de datos local
+# Bases de datos / Databases
 *.sqlite
+*.sqlite3
 *.db
+*.sqlite-wal
+*.sqlite-shm
 /database.sqlite
 
 # Datos temporales / logs
 /tmp/
-.cache/
+/.cache/
 *.log
 
-# IDEs y SO
+# Test / coverage
+coverage/
+.phpunit.result.cache
+
+# IDEs y SO / OS & editors
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.iml
 *.swp
-
-# PHPUnit
-/coverage/
-.phpunit.result.cache
 
 # Datos legacy (opcional)
 # Descomenta si no quieres subir los CSV antiguos
 #/data/
+
+# If you prefer to commit the compiled CSS (public/assets/css/app.css),
+# remove or comment out the `public/assets/` line above.
