@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reglas personalizadas aquí */
+:root {
+  --brand: #0ea5a4;
+}
