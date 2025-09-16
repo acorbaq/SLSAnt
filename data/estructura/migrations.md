@@ -25,3 +25,39 @@ Tabla pivote N:M entre ingredientes y alergenos. Esta tabla permite relacionar v
     - id_ingrediente: Identificador del ingrediente.
     - id_alergeno: Identificador del alergeno.
 
+## 20250916-2-SLSANT.sql
+Tabla usuarios. Esta tabla permite definir los usuarios que pueden acceder a la aplicación.
+    - id: Identificador unico del usuario.
+    - username: Nombre de usuario unico.
+    - email: Correo electronico del usuario.
+    - password: Contraseña del usuario (almacenada con password_hash()).
+    - is_active: Indica si el usuario está activo (1) o inactivo (0).
+    - created_at: Fecha y hora de creación del usuario.
+    - last_login: Fecha y hora del último inicio de sesión del usuario.
+
+Tabla roles. Esta tabla define los diferentes roles que pueden tener los usuarios en la aplicación.
+    - id: Identificador unico del rol.
+    - name: Nombre del rol (por ejemplo, 'admin', 'gestor', 'calidad', 'operador').
+    - description: Descripción del rol.
+
+Tabla pivote N:M entre usuarios y roles. Esta tabla permite asignar varios roles a un usuario y viceversa.
+    - id: Identificador unico de la relacion.
+    - user_id: Identificador del usuario.
+    - role_id: Identificador del rol.
+
+### Descripción de los roles:
+- admin
+  - Permisos: acceso completo; crear/editar/Eliminar usuarios, roles y configuraciones; ejecutar tareas críticas.
+  - Uso: cuenta de administración y emergencia.
+
+- gestor
+  - Permisos: gestionar productos, ingredientes y escandallos; no gestiona usuarios ni roles.
+  - Uso: operaciones diarias de contenido y catálogos.
+
+- calidad
+  - Permisos: acceso a informes, auditorías y visualización de datos sensibles; no modificar datos de producción.
+  - Uso: responsables de control de calidad y trazabilidad.
+
+- operador
+  - Permisos: acceso limitado para tareas operativas (visualizar productos/ingredientes, añadir producciones/escandallos, imprimir etiquetas).
+  - Uso: personal de planta/producción.
