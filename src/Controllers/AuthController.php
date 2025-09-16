@@ -69,6 +69,27 @@ class AuthController
             $this->showForm();
         }
     }
+    /**
+     * Logout: destruye la sesión y la redirige al login.
+     * 
+     * Flujo:
+     * - Asegura la sesión (initSession) para poder manipular $_SESSION.
+     * - Llama a Auth::logout() que destruye la sesión y cookies.
+     * - Redirige al login.
+     */
+    public function logout(): void
+    {
+        // Asegurar que la sesión está iniciada.
+        Csrf::init();
+        Auth::initSession();
+
+        // El helper Auth hace unset($_SESSION['user_id']) y session_regenerate_id(true).
+        Auth::logout();
+
+        // Redirigir al login 
+        header('Location: /login.php');
+        exit;
+    }
 
     /**
      * Muestra la vista de login.
