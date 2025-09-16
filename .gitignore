@@ -1,0 +1,31 @@
+# Dependencias de Composer
+/vendor/
+composer.lock
+
+# Entorno
+.env
+
+# Base de datos local
+*.sqlite
+*.db
+/database.sqlite
+
+# Datos temporales / logs
+/tmp/
+.cache/
+*.log
+
+# IDEs y SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# PHPUnit
+/coverage/
+.phpunit.result.cache
+
+# Datos legacy (opcional)
+# Descomenta si no quieres subir los CSV antiguos
+#/data/
