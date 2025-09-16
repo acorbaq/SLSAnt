@@ -1,5 +1,4 @@
 PRAGMA foreign_keys = ON;
-BEGIN TRANSACTION;
 
 -- 1) Tabla de alergenos
 CREATE TABLE IF NOT EXISTS alergenos (
@@ -23,5 +22,3 @@ CREATE TABLE IF NOT EXISTS ingredientes_alergenos (
   FOREIGN KEY (id_ingrediente) REFERENCES ingredientes(id_ingrediente) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (id_alergeno)    REFERENCES alergenos(id_alergeno)    ON DELETE CASCADE ON UPDATE CASCADE
 );
-
-COMMIT;
