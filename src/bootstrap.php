@@ -48,7 +48,11 @@ if (file_exists($root . '/.env')) {
 // -------------------------------------------------------------
 // Preferencia: variable DB_PATH en .env. Si no existe, usar fallback.
 $dbPath = $_ENV['DB_PATH'] ?? ($root . '/database.sqlite');
-
+$debug = $_ENV['APP_DEBUG'] ?? 'false';
+if ($debug === 'true') {
+    ini_set('display_errors', '1');
+    error_reporting(E_ALL);
+}
 // Si DB_PATH es una ruta relativa (no comienza por "/" ni con unidad Windows),
 // la convertimos a una ruta absoluta relativa a la raíz del proyecto.
 // Esto evita confusión si en .env pones "database/database.sqlite" o "./database/database.sqlite".
