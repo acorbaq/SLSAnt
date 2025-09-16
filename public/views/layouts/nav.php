@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Utils\Auth;
 use App\Utils\Csrf;
+use App\Utils\Access;
 
 /**
  * nav.php
@@ -60,13 +61,39 @@ Auth::initSession();
  */
 $user = Auth::user($pdo);
 $csrf = Csrf::generateToken();
+$menus = [
+  Access::M_INGREDIENTES => ['label' => 'Ingredientes', 'href' => '/ingredientes.php'],
+  Access::M_ELABORADOS   => ['label' => 'Elaborados',   'href' => '/elaborados.php'],
+  Access::M_LOTES        => ['label' => 'Lotes',        'href' => '/lotes.php'],
+  Access::M_IMPRESION    => ['label' => 'Impresión',    'href' => '/impresion.php'],
+  Access::M_APPCC        => ['label' => 'APPCC',        'href' => '/appcc.php'],
+  Access::M_CALIDAD      => ['label' => 'Calidad',      'href' => '/calidad.php'],
+  Access::M_USUARIOS     => ['label' => 'Usuarios',     'href' => '/usuarios.php'],
+];
+
+// Obtener menús permitidos para el usuario actual consultando la BD.
+// Si no hay usuario autenticado, $allowed será vacío.
+$allowed = [];
+if ($user) {
+    $allowed = Access::menusForUser($pdo, (int)$user['id']);
+}
 ?>
-<nav class="p-4 bg-white border-b" role="navigation" aria-label="Navegación principal">
+<nav class="p-4 bg-white border-b">
   <div class="max-w-6xl mx-auto flex justify-between items-center">
+    <div class="flex items-center space-x-4">
     <!-- Marca / Identidad -->
     <div class="text-sm font-semibold">SLSAnt</div>
 
-    <!-- Estado de sesión: saludo + logout (si autenticado) o enlace a login -->
+      <?php if ($allowed): ?>
+        <?php foreach ($allowed as $key):
+            if (!isset($menus[$key])) continue;
+            $m = $menus[$key];
+        ?>
+          <a href="<?php echo htmlentities($m['href']); ?>" class="text-sm text-gray-700 hover:text-teal-600"><?php echo htmlentities($m['label']); ?></a>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+
     <div>
       <?php if ($user): ?>
         <?php
