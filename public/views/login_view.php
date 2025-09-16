@@ -1,30 +1,35 @@
 <?php
 declare(strict_types=1);
+
 /**
- * View: login_view.php
+ * login_view.php
  *
- * Plantilla responsable de renderizar el formulario de acceso.
+ * Plantilla de presentación para el formulario de acceso (login).
  *
- * Variables esperadas (inyectadas por el controlador):
- *  - array  $errors   : Lista de mensajes de error a mostrar (puede estar vacía).
- *  - string $oldUser  : Valor previo del campo "user" para repoblar formulario.
- *  - string $csrf     : Token CSRF generado y almacenado en la sesión.
+ * Contracto / variables esperadas (inyectadas por el controlador):
+ *  - array  $errors   => lista de mensajes de error a mostrar (puede estar vacía).
+ *  - string $oldUser  => valor previo del campo "user" para repoblar el formulario.
+ *  - string $csrf     => token CSRF generado por Csrf::generateToken().
  *
- * Comportamiento / flujo:
- *  - La vista no realiza lógica de negocio ni accesos directos a la BD.
- *  - Escapa todas las salidas que provienen del usuario con htmlentities() para evitar XSS.
- *  - Incluye un campo oculto "csrf" que debe coincidir con el token almacenado en la sesión;
- *    el controlador valida este token antes de procesar el POST.
+ * Responsabilidad:
+ *  - Renderizar la interfaz (HTML) sin realizar lógica de negocio ni accesos a la BD.
+ *  - Escapar toda salida procedente del usuario para prevenir XSS.
+ *  - Incluir el token CSRF en un campo oculto; el controlador validará dicho token.
  *
- * Seguridad:
- *  - No imprime ni manipula contraseñas.
- *  - Usa atributos HTML5 (required) para validación básica en cliente; la validación
- *    real se realiza en el servidor (en el controlador).
+ * Notas de seguridad y accesibilidad:
+ *  - No imprimir campos sensibles (password).
+ *  - Usar htmlentities() con ENT_QUOTES y codificación UTF-8 para escapar salidas.
+ *  - Mantener atributos HTML5 (required) para mejora UX, la validación real es servidor.
+ *  - El formulario usa POST (no GET) porque cambia estado (autenticación).
  *
- * Responsabilidad: presentar datos y delegar validaciones y acciones al controlador.
+ * Tailwind:
+ *  - Esta plantilla aplica utilidades Tailwind para el layout y estilos.
+ *  - El CSS resultante debe compilarse a public/assets/css/app.css (npm / tailwind).
+ *
+ * @package SLSAnt\View
  */
 
- // Normalizar variables para evitar "undefined variable" en la plantilla.
+ // Normalizar variables para evitar "undefined variable" en caso de llamadas directas.
 $errors  = $errors  ?? [];
 $oldUser = $oldUser ?? '';
 $csrf    = $csrf    ?? '';
@@ -33,70 +38,88 @@ $csrf    = $csrf    ?? '';
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Login - SLSAnt</title>
-<link rel="stylesheet" href="/assets/css/app.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Login - SLSAnt</title>
+  <!-- Hoja de estilos compilada por Tailwind -->
+  <link rel="stylesheet" href="/assets/css/app.css">
 </head>
-<body>
-<div class="container" style="max-width:480px;margin:4rem auto;">
-  <h1>Acceso</h1>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <main class="w-full max-w-md mx-auto p-6">
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+      <div class="p-6">
+        <h1 class="text-2xl font-semibold text-gray-800 mb-4">Acceso a SLSAnt</h1>
 
-  <?php
-  // Si el controlador ha pasado errores, los mostramos en una lista.
-  // Cada mensaje se escapa con htmlentities() para prevenir XSS si contienen texto no confiable.
-  if ($errors): ?>
-    <div style="color:#b00020">
-      <ul>
-        <?php
-        // Iteración segura: se asume $errors es un array de strings.
-        foreach ($errors as $e) {
-            echo "<li>" . htmlentities((string)$e, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</li>";
-        }
-        ?>
-      </ul>
+        <?php if ($errors): ?>
+          <!--
+            Presentación de errores:
+            - El controlador debe poblar $errors con mensajes amigables.
+            - Cada mensaje se escapa para evitar inyección de HTML.
+            - Se muestra un contenedor visual accesible (contraste y estructura de lista).
+          -->
+          <div class="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded" role="alert" aria-live="polite">
+            <ul class="list-disc list-inside text-sm">
+              <?php foreach ($errors as $e): ?>
+                <li><?php echo htmlentities((string)$e, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+        <?php endif; ?>
+
+        <!--
+          Formulario de login:
+          - method="post" porque es una operación que modifica estado (inicio de sesión).
+          - action apunta al front controller /login.php; el controlador realiza la validación.
+          - autocomplete="off" reduce autocompletado en contextos locales; no sustituye validación.
+        -->
+        <form method="post" action="/login.php" autocomplete="off" class="space-y-4" novalidate>
+          <!-- Campo oculto CSRF: imprescindible para prevenir CSRF -->
+          <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+
+          <div>
+            <label for="user" class="block text-sm font-medium text-gray-700 mb-1">Usuario o email</label>
+            <!--
+              Campo "user":
+              - Se repuebla con $oldUser para mantener la entrada del usuario en caso de error.
+              - El valor se escapa para evitar XSS reflejado.
+              - required para validación básica del navegador; la validación definitiva es servidor.
+            -->
+            <input id="user" name="user" type="text" required
+                   value="<?php echo htmlentities($oldUser, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                   aria-label="Usuario o email" />
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+            <!--
+              Campo "password":
+              - Tipo password para ocultar la entrada en la UI.
+              - Nunca se repuebla desde el servidor por razones de seguridad.
+            -->
+            <input id="password" name="password" type="password" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                   aria-label="Contraseña" />
+          </div>
+
+          <div class="flex items-center justify-between">
+            <!-- Placeholder para enlaces adicionales (recuperar contraseña, recuerdame) si se añaden -->
+            <div class="text-sm text-gray-600" aria-hidden="true"></div>
+
+            <!-- Botón principal -->
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    aria-pressed="false">
+              Entrar
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  <?php endif; ?>
 
-  <!--
-    Formulario de login:
-    - method="post" porque cambia estado (autenticación).
-    - action apunta a /login.php (front controller), que delega al AuthController.
-    - autocomplete="off" para evitar que el navegador sugiera contraseñas en contextos locales,
-      aunque esto es solo una ayuda de UX y no sustituye la seguridad del servidor.
-  -->
-  <form method="post" action="/login.php" autocomplete="off">
-    <!--
-      Campo oculto CSRF:
-      - Debe contener exactamente el token generado por Csrf::generateToken().
-      - El controlador usará Csrf::validateToken() para rechazar peticiones no autorizadas.
-    -->
-    <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-
-    <div>
-      <label>Usuario o email</label>
-      <!--
-        Campo "user":
-        - Se repuebla con $oldUser para mantener la entrada en caso de errores.
-        - Se escapa con htmlentities() al renderizar.
-      -->
-      <input name="user" type="text" required value="<?php echo htmlentities($oldUser, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-    </div>
-
-    <div>
-      <label>Contraseña</label>
-      <!--
-        Campo "password":
-        - Tipo password para ocultar entrada en la UI.
-        - Nunca se repuebla ni se muestra su valor.
-      -->
-      <input name="password" type="password" required>
-    </div>
-
-    <div style="margin-top:1rem">
-      <button type="submit">Entrar</button>
-    </div>
-  </form>
-</div>
+    <footer class="text-center text-xs text-gray-500 mt-4" role="contentinfo" aria-hidden="false">
+      <p>SLSAnt — Entorno local</p>
+    </footer>
+  </main>
 </body>
 </html>
