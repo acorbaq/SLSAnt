@@ -1,11 +1,6 @@
 <?php
 declare(strict_types=1);
 
-namespace {
-    // Este fichero es una vista parcial (layout) y no forma parte del namespace principal
-    // para mantener compatibilidad con includes simples desde public/*.php.
-}
-
 use App\Utils\Auth;
 use App\Utils\Csrf;
 
