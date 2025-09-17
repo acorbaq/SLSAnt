@@ -109,7 +109,7 @@ $canEditGlobal = in_array($userRole, [Access::ROLE_ADMIN, Access::ROLE_GESTOR], 
     <main class="max-w-6xl mx-auto py-12 px-4">
         <header class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Panel principal</h1>
-            <?php if ($debug): ?>
+            <?php if (!empty($debug)): ?>
                 <!-- Debug: información visible sólo en entornos de desarrollo -->
                 <p class="mt-2 text-sm text-gray-600">
                     <span class="inline-block text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded mr-2">DEBUG</span>
