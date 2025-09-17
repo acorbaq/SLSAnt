@@ -253,4 +253,63 @@ class User
             throw $e;
         }
     }
+    
+    /**
+     * Actualiza la fecha de último login de un usuario.
+     *
+     * @param PDO $pdo
+     * @param int $userId
+     * @return void
+     */
+    public static function updateLastLogin(PDO $pdo, int $userId): void
+    {
+        $sql = "UPDATE users SET last_login = datetime('now') WHERE id = :uid";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+    }
+
+
+    /**
+     * Actualiza los datos públicos de un usuario.
+     *
+     * $data keys: username, email, password (plain, optional), is_active
+     *
+     * @param PDO $pdo
+     * @param int $id
+     * @param array $data
+     * @return void
+     */
+    public function updateUser(PDO $pdo, int $id, array $data): void
+    {
+        $fields = [];
+        $params = [':id' => $id];
+
+        if (isset($data['username'])) {
+            $fields[] = 'username = :username';
+            $params[':username'] = $data['username'];
+        }
+        if (array_key_exists('email', $data)) {
+            $fields[] = 'email = :email';
+            $params[':email'] = $data['email'];
+        }
+        if (array_key_exists('is_active', $data)) {
+            $fields[] = 'is_active = :is_active';
+            $params[':is_active'] = (int)$data['is_active'];
+        }
+        // password: si viene no vacío, hashear y actualizar
+        if (!empty($data['password'])) {
+            $fields[] = 'password = :password';
+            $params[':password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+        }
+
+        if (empty($fields)) {
+            // nada que hacer
+            return;
+        }
+
+        $sql = 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = :id';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+    }
+    
 }
