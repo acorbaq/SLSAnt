@@ -51,8 +51,14 @@ use App\Utils\Auth;
 use App\Utils\Redirect;
 use App\Controllers\IngredienteController;
 
-// Asegurar que la sesión está inicializada y configurada (cookies seguras, session_start(), etc.)
+// Asegurar que la sesión está inicializada y que Auth puede leer $_SESSION.
 Auth::initSession();
+
+// Forzar login: si no hay usuario autenticado Redirect::requireLogin() redirige a /login.php y termina.
+Redirect::requireLogin($pdo);
+
+// Obtener usuario actual (garantizado que existe tras requireLogin)
+$user = Auth::user($pdo);
 
 
 $titleSection = 'Ingredientes - SLSAnt';
