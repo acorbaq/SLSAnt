@@ -64,22 +64,11 @@ $csrf = Csrf::generateToken();
     </header>
 
     <section class="mb-6">
-      <!--
-        Formulario de creación:
-        - Solo visible para Admin según $viewerRole.
-        - Envía action=create y token CSRF.
-        - El controlador debe validar y hashear la contraseña.
-      -->
+      <!-- BOTONES: Crear / Asignar roles abren el editor via GET -->
       <?php if ($viewerRole === \App\Utils\Access::ROLE_ADMIN): ?>
-        <form method="post" action="/usuarios.php" class="mb-4" autocomplete="off">
-          <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-          <input type="hidden" name="action" value="create">
-          <div class="flex gap-2">
-            <input name="username" required placeholder="usuario" class="px-3 py-2 border rounded" />
-            <input name="password" type="password" required placeholder="contraseña" class="px-3 py-2 border rounded" />
-            <button type="submit" class="px-4 py-2 bg-teal-500 text-white rounded">Crear</button>
-          </div>
-        </form>
+        <div class="mb-4 text-right">
+          <a href="/usuarios.php?crear" class="inline-block px-4 py-2 bg-teal-500 text-white rounded mr-2">Crear usuario</a>
+        </div>
       <?php endif; ?>
 
       <!-- Tabla de usuarios -->
@@ -96,7 +85,7 @@ $csrf = Csrf::generateToken();
           <tbody>
 
             <!-- DEBUG: número de usuarios encontrados -->
-            <?php if (!empty($debug)): ?>
+            <?php if ($debug): ?>
               <tr><td colspan="4" class="p-3 text-sm"><strong>DEBUG:</strong> usuarios encontradas: <?php echo (int)count($users); ?></td></tr>
             <?php endif; ?>
 
@@ -117,35 +106,8 @@ $csrf = Csrf::generateToken();
 
                 <td class="p-3 text-sm">
                   <?php if ($viewerRole === \App\Utils\Access::ROLE_ADMIN): ?>
-                    <!--
-                      Asignar roles:
-                      - Se renderiza un form con checkboxes por cada role definido en $roles.
-                      - El nombre que se envía es el nombre del role; el backend debe mapear a role_id.
-                      - Checked si el roleName está presente en $u['roles'].
-                    -->
-                    <details style="display:inline;margin-left:0.5rem;">
-                      <summary class="text-sm text-blue-600 hover:underline">Asignar roles</summary>
-                      <form method="post" action="/usuarios.php" class="mt-2">
-                        <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                        <input type="hidden" name="action" value="assign_roles">
-                        <input type="hidden" name="id" value="<?php echo (int)$u['id']; ?>">
-
-                        <?php foreach ($roles as $r):
-                          // Normalizar: $r puede ser string o array ['id'=>..,'name'=>..]
-                          $roleName = is_array($r) ? ($r['name'] ?? '') : (string)$r;
-                          $checked = in_array($roleName, $rolesList, true) ? 'checked' : '';
-                        ?>
-                          <label class="inline-flex items-center mr-2 text-sm">
-                            <input type="checkbox" name="roles[]" value="<?php echo htmlentities($roleName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>" <?php echo $checked; ?>>
-                            <span class="ml-1"><?php echo htmlentities($roleName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></span>
-                          </label>
-                        <?php endforeach; ?>
-
-                        <div class="mt-2">
-                          <button type="submit" class="px-3 py-1 bg-teal-500 text-white rounded text-sm">Guardar</button>
-                        </div>
-                      </form>
-                    </details>
+                    <!-- Abrir editor en GET para modificar -->
+                    <a href="/usuarios.php?modificar&id=<?php echo (int)$u['id']; ?>" class="text-blue-600 hover:underline mr-3">Modificar</a>
 
                     <!-- Eliminar usuario: botón en form POST -->
                     <div class="inline-block float-right">
