@@ -48,11 +48,30 @@ if (file_exists($root . '/.env')) {
 // -------------------------------------------------------------
 // Preferencia: variable DB_PATH en .env. Si no existe, usar fallback.
 $dbPath = $_ENV['DB_PATH'] ?? ($root . '/database.sqlite');
-$debug = $_ENV['APP_DEBUG'] ?? 'false';
-if ($debug === 'true') {
-    ini_set('display_errors', '1');
-    error_reporting(E_ALL);
-}
+
+// -------------------------------------------------------------
+// 2.1) Normalizar APP_DEBUG
+// -------------------------------------------------------------
+
+ // Normalizar APP_DEBUG como booleano y definir constantes accesibles globalmente
+ $appDebugRaw = $_ENV['APP_DEBUG'] ?? ($_ENV['APP_DEBUG'] ?? 'false');
+ // FILTER_VALIDATE_BOOLEAN interpreta 'true','1','on','yes' como true
+ $appDebug = (bool)filter_var((string)$appDebugRaw, FILTER_VALIDATE_BOOLEAN);
+ if (!defined('APP_DEBUG')) {
+     define('APP_DEBUG', $appDebug);
+ }
+ // Opcional: definir APP_ENV y APP_NAME para uso en vistas/controladores
+ if (!defined('APP_ENV')) {
+     define('APP_ENV', $_ENV['APP_ENV'] ?? 'production');
+ }
+ if (!defined('APP_NAME')) {
+     define('APP_NAME', $_ENV['APP_NAME'] ?? ($_ENV['APP_NAME'] ?? 'SLSAnt'));
+ }
+ if (APP_DEBUG) {
+     ini_set('display_errors', '1');
+     error_reporting(E_ALL);
+ }
+
 // Si DB_PATH es una ruta relativa (no comienza por "/" ni con unidad Windows),
 // la convertimos a una ruta absoluta relativa a la raíz del proyecto.
 // Esto evita confusión si en .env pones "database/database.sqlite" o "./database/database.sqlite".
