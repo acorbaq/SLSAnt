@@ -139,6 +139,16 @@ class UserController
      */
     private function renderEdit(?int $id): void
     {
+        // Comprobar rol del usuario que intenta abrir el editor.
+        // Solo los admins deben poder crear/modificar usuarios.
+        $viewer = Auth::user($this->pdo);
+        $viewerRoles = $viewer ? Access::getUserRoles($this->pdo, (int)$viewer['id']) : [];
+        $viewerRole = Access::highestRole($viewerRoles);
+        if ($viewerRole !== Access::ROLE_ADMIN) {
+            // Redirigir al listado si no tiene permiso (evita exponer el formulario)
+            Redirect::to('/usuarios.php');
+        }
+
         $user = null;
         if ($id !== null && $id > 0) {
             $user = $this->userModel->findById($this->pdo, $id);
