@@ -27,6 +27,7 @@ declare(strict_types=1);
  *  - Todas las salidas se escapan con htmlentities para evitar XSS.
  *  - El formulario envía action=save y id (0 para crear). El controller decide create/update.
  */
+
 $titleSection = $ingrediente ? 'Editar ingrediente - SLSAnt' : 'Crear ingrediente - SLSAnt';
 ?>
 <body>
@@ -109,16 +110,84 @@ $titleSection = $ingrediente ? 'Editar ingrediente - SLSAnt' : 'Crear ingredient
       <a href="/ingredientes.php" class="px-4 py-2 border rounded">Cancelar</a>
     </div>
   </form>
+</main>
+  <!-- Debug: información útil sólo en entornos de desarrollo -->
+  <?php if ($debug): ?>
+    <section class="mt-6 p-4 bg-gray-50 border rounded text-sm text-gray-700">
+      <div class="mb-2"><strong>DEBUG: contexto del formulario</strong></div>
 
-  <!--
-    Nota de depuración:
-    - Si $debug está activado el controller puede pasar variable para inspeccionar $ingrediente.
-    - Esto nunca debe estar activado en producción.
-  -->
-  <?php if (!empty($debug)): ?>
-    <pre class="mt-4"><?php echo htmlentities(var_export($ingrediente, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+      <div class="grid gap-2 text-xs">
+        <div><strong>CSRF token (trunc.):</strong> <?php echo htmlentities(substr((string)($csrf ?? ''), 0, 64), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+
+        <div>
+          <strong>Ingrediente (parsed):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $txt = var_export($ingrediente ?? [], true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <div>
+          <strong>Alérgenos disponibles (count <?php echo count($alergenos ?? []); ?>):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $txt = var_export($alergenos ?? [], true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <div><strong>IDs seleccionados:</strong> <?php echo htmlentities(implode(', ', array_map('strval', $sel)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+
+        <hr class="my-2" />
+
+        <div><strong>Request</strong></div>
+        <div><strong>Method:</strong> <?php echo htmlentities($_SERVER['REQUEST_METHOD'] ?? 'N/A', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div><strong>Query:</strong> <?php echo htmlentities((string)($_SERVER['QUERY_STRING'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div>
+          <strong>GET:</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($_GET ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+        <div>
+          <strong>POST (trunc.):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $p = $_POST ?? [];
+            unset($p['csrf']);
+            $txt = var_export($p, true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <hr class="my-2" />
+
+        <div><strong>Entorno</strong></div>
+        <div><strong>PHP:</strong> <?php echo htmlentities(PHP_VERSION, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div><strong>Memory (usage/peak):</strong> <?php echo round(memory_get_usage()/1024/1024,2).'MB / '.round(memory_get_peak_usage()/1024/1024,2).'MB'; ?></div>
+        <div>
+          <strong>PDO driver:</strong>
+          <?php
+            $drv = '<unavailable>';
+            if (isset($pdo) && $pdo instanceof PDO) {
+                try { $drv = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME); } catch (\Throwable $e) { $drv = '<error>'; }
+            }
+            echo htmlentities((string)$drv, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?>
+        </div>
+
+        <div><strong>Session id:</strong> <?php echo htmlentities(session_id() ?: 'no-session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div>
+          <strong>Session (trunc.):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $s = $_SESSION ?? [];
+            $txt = var_export($s, true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+      </div>
+    </section>
   <?php endif; ?>
 
-</main>
 </body>
 </html>
