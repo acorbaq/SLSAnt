@@ -134,5 +134,93 @@ $csrf = Csrf::generateToken();
   <!-- Enlace para volver al panel -->
   <p class="mt-4"><a href="/index.php" class="text-teal-600">Volver al panel</a></p>
 </main>
+  <!-- Bloque de depuración detallada (solo en entorno DEBUG).
+       Se muestra información útil y segura para desarrollo: entorno, request,
+       token CSRF truncado, listado de alérgenos/ingredientes, sesión y roles.
+       Datos potencialmente sensibles se truncan para evitar volcar credenciales. -->
+  <?php if (!empty($debug)): ?>
+    <section class="mt-6 p-4 bg-gray-50 border rounded text-xs text-gray-700">
+      <div class="mb-2"><strong>DEBUG: información de contexto</strong></div>
+
+      <div class="grid gap-2">
+        <div><strong>APP_DEBUG:</strong> <?php echo defined('APP_DEBUG') ? (APP_DEBUG ? 'true' : 'false') : (empty($debug) ? 'false' : 'true'); ?></div>
+        <div><strong>PHP:</strong> <?php echo htmlentities(PHP_VERSION, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div>
+          <strong>Request:</strong>
+          <?php echo htmlentities($_SERVER['REQUEST_METHOD'] ?? 'N/A', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
+          &nbsp;<?php echo htmlentities((string)($_SERVER['QUERY_STRING'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
+        </div>
+        <div><strong>Fecha / Hora:</strong> <?php echo htmlentities(date('c'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div><strong>Mem (uso/peak):</strong> <?php echo round(memory_get_usage()/1024/1024, 2).'MB / '.round(memory_get_peak_usage()/1024/1024,2).'MB'; ?></div>
+
+        <hr class="my-2" />
+
+        <div><strong>CSRF token (trunc.):</strong> <?php echo htmlentities(substr((string)($csrf ?? ''), 0, 64), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+
+        <div>
+          <strong>Ingredientes (count):</strong> <?php echo count($ingredientes ?? []); ?>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $txt = var_export(array_slice($ingredientes ?? [], 0, 30), true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <div>
+          <strong>Alergenos (count):</strong> <?php echo count($alergenos ?? []); ?>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $txt = var_export($alergenos ?? [], true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <hr class="my-2" />
+
+        <div><strong>Usuario / Sesión</strong></div>
+        <?php if (!empty($user) && is_array($user)): ?>
+          <div><strong>ID:</strong> <?php echo htmlentities((string)$user['id'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?> &nbsp; <strong>Username:</strong> <?php echo htmlentities((string)($user['username'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+          <div class="mt-2">
+            <strong>Roles completos:</strong>
+            <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($roles ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+          </div>
+          <div class="mt-2"><strong>Rol principal:</strong> <?php echo htmlentities((string)($userRole ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <?php else: ?>
+          <div>No hay usuario autenticado.</div>
+        <?php endif; ?>
+
+        <div class="mt-2"><strong>Session id:</strong> <?php echo htmlentities(session_id() ?: 'no-session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        <div class="mt-2">
+          <strong>Session (trunc.):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php
+            $s = $_SESSION ?? [];
+            $txt = var_export($s, true);
+            if (strlen($txt) > 2000) $txt = substr($txt, 0, 2000) . "\n...truncated...";
+            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?></pre>
+        </div>
+
+        <hr class="my-2" />
+
+        <div><strong>Configuración</strong></div>
+        <div><strong>Allowed menu keys (truncated):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export(array_slice($allowedKeys ?? [], 0, 100), true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+        <div><strong>Menus catalog keys (count <?php echo count($menusCatalog ?? []); ?>):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export(array_keys($menusCatalog ?? []), true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+
+        <div class="mt-2"><strong>PDO driver:</strong>
+          <?php
+            $drv = '<unavailable>';
+            if (isset($pdo) && $pdo instanceof PDO) {
+                try { $drv = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME); } catch (\Throwable $e) { $drv = '<error>'; }
+            }
+            echo htmlentities((string)$drv, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          ?>
+        </div>
+      </div>
+    </section>
+  <?php endif; ?>
 </body>
 </html>
