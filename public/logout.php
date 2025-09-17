@@ -49,6 +49,8 @@ use App\Controllers\AuthController;
 // Nota: el constructor espera $pdo según el contrato de la aplicación.
 $controller = new AuthController($pdo);
 
+$titleSection = 'Logout - SLSAnt';
+require_once __DIR__ . '/views/layouts/head.php'; // Incluir head común con CSS/JS
 // Delegamos la responsabilidad completa de logout al controlador.
 // El método debe validar método/CSRF y realizar la redirección apropiada.
 // Si el controlador lanza excepciones no capturadas, se propagará y debería manejarse en un handler global.

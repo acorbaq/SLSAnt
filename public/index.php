@@ -57,5 +57,8 @@ if (empty($allowedMenus)) {
 
 // Incluir la barra de navegación compartida y la vista principal.
 // Nota: index_view.php espera que $user / $pdo estén disponibles en este scope.
+
+$titleSection = 'Panel - SLSAnt';
+require_once __DIR__ . '/views/layouts/head.php'; // Incluir head común con CSS/JS
 require __DIR__ . '/views/layouts/nav.php';
 require __DIR__ . '/views/index_view.php';

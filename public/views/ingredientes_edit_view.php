@@ -27,15 +27,8 @@ declare(strict_types=1);
  *  - Todas las salidas se escapan con htmlentities para evitar XSS.
  *  - El formulario envía action=save y id (0 para crear). El controller decide create/update.
  */
+$titleSection = $ingrediente ? 'Editar ingrediente - SLSAnt' : 'Crear ingrediente - SLSAnt';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/assets/css/app.css">
-  <title><?php echo $ingrediente ? 'Editar' : 'Crear'; ?> ingrediente</title>
-</head>
 <body>
 <main class="max-w-lg mx-auto py-12 px-4">
 

@@ -60,6 +60,9 @@ Redirect::requireLogin($pdo);
 //    - Si no está autorizado redirige a /index.php (o la ruta fallback configurada).
 Redirect::requirePermission($pdo, Access::M_USUARIOS);
 
+$titleSection = 'Usuarios - SLSAnt';
+
+require_once __DIR__ . '/views/layouts/head.php'; // Incluir head común con CSS/JS
 require_once __DIR__ . '/views/layouts/nav.php'; // Incluir barra de navegación común
 // 4) Delegar el manejo completo de la petición al controlador.
 //    - UserController debe validar método HTTP, CSRF en POST y ejecutar las acciones necesarias.

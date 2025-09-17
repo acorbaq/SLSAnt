@@ -34,16 +34,9 @@ $errors  = $errors  ?? [];
 $oldUser = $oldUser ?? '';
 $csrf    = $csrf    ?? '';
 
+$titleSection = 'Acceso a SLSAnt';
+include_once __DIR__ . '/layouts/head.php';
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Login - SLSAnt</title>
-  <!-- Hoja de estilos compilada por Tailwind -->
-  <link rel="stylesheet" href="/assets/css/app.css">
-</head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <main class="w-full max-w-md mx-auto p-6">
     <div class="bg-white shadow-md rounded-lg overflow-hidden">

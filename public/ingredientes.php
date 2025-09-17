@@ -54,6 +54,10 @@ use App\Controllers\IngredienteController;
 // Asegurar que la sesión está inicializada y configurada (cookies seguras, session_start(), etc.)
 Auth::initSession();
 
+
+$titleSection = 'Ingredientes - SLSAnt';
+
+require_once __DIR__ . '/views/layouts/head.php'; // Incluir head común con CSS/JS
 // Incluir barra de navegación común (presentación). Debe ser ligera y no afectar la lógica.
 require_once __DIR__ . '/views/layouts/nav.php';
 

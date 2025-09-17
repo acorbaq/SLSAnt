@@ -103,14 +103,6 @@ if (isset($user) && is_array($user) && isset($user['id'])) {
  */
 $canEditGlobal = in_array($userRole, [Access::ROLE_ADMIN, Access::ROLE_GESTOR], true);
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SLSAnt · Panel</title>
-  <link rel="stylesheet" href="/assets/css/app.css">
-</head>
 <body class="bg-gray-50 min-h-screen">
   <main class="max-w-6xl mx-auto py-12 px-4">
     <header class="mb-8">

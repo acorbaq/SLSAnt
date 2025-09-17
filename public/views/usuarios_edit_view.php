@@ -15,13 +15,6 @@ declare(strict_types=1);
  * Acceso: solo Admin puede entrar desde la UI, pero el controlador también valida permisos.
  */
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title><?php echo $user ? 'Modificar usuario' : 'Crear usuario'; ?> · SLSAnt</title>
-  <link rel="stylesheet" href="/assets/css/app.css">
-</head>
 <body class="bg-gray-50 min-h-screen">
   <main class="max-w-lg mx-auto py-12 px-4">
     <header class="mb-6">

@@ -45,13 +45,6 @@ Csrf::init();
 // Generar token CSRF para incluir en todos los formularios de la vista.
 $csrf = Csrf::generateToken();
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Usuarios · SLSAnt</title>
-  <link rel="stylesheet" href="/assets/css/app.css">
-</head>
 <body class="bg-gray-50 min-h-screen">
   <main class="max-w-5xl mx-auto py-12 px-4">
     <header class="mb-6">

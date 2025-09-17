@@ -52,6 +52,9 @@ require_once __DIR__ . '/../src/bootstrap.php';
 
 use App\Controllers\AuthController;
 
+
+$titleSection = 'Logout - SLSAnt';
+require_once __DIR__ . '/views/layouts/head.php'; // Incluir head común con CSS/JS
 /*
  * Instanciación e invocación del controlador.
  * - El controlador realiza todo el trabajo: renderizar vista o procesar login.

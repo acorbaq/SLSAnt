@@ -40,15 +40,6 @@ use App\Utils\Csrf;
 Csrf::init();
 $csrf = Csrf::generateToken();
 ?>
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/assets/css/app.css">
-  <title>Ingredientes</title>
-</head>
-<body>
 <main class="max-w-5xl mx-auto py-8 px-4">
 
   <!-- Encabezado -->
