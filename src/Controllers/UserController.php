@@ -75,6 +75,19 @@ class UserController
         Csrf::init();
         Auth::initSession();
 
+        // GET: check for editor requests first
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            if (isset($_GET['crear'])) {
+                $this->renderEdit(null);
+                return;
+            }
+            if (isset($_GET['modificar']) && isset($_GET['id'])) {
+                $id = (int)$_GET['id'];
+                $this->renderEdit($id);
+                return;
+            }
+        }
+
         // Si es POST procesar acción, si no renderizar listado.
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->handlePost();
@@ -119,6 +132,32 @@ class UserController
     }
 
     /**
+     * renderEdit: muestra formulario vacío para crear o con datos para editar.
+     *
+     * @param int|null $id
+     * @return void
+     */
+    private function renderEdit(?int $id): void
+    {
+        $user = null;
+        if ($id !== null && $id > 0) {
+            $user = $this->userModel->findById($this->pdo, $id);
+            if ($user === null) {
+                Redirect::to('/usuarios.php');
+            }
+        }
+
+        $roles = Access::definedRoles();
+        $viewer = Auth::user($this->pdo);
+        $viewerRoles = $viewer ? Access::getUserRoles($this->pdo, (int)$viewer['id']) : [];
+        $viewerRole = Access::highestRole($viewerRoles);
+        $debug = defined('APP_DEBUG') && APP_DEBUG === true;
+        $csrf = Csrf::generateToken();
+
+        require __DIR__ . '/../../public/views/usuarios_edit_view.php';
+    }
+
+    /**
      * handlePost
      *
      * Procesa acciones enviadas por POST:
@@ -153,24 +192,37 @@ class UserController
         $viewerRole = Access::highestRole($viewerRoles);
 
         // --- CREATE (solo Admin) ---
-        if ($action === 'create') {
-            // Comprobación server-side: solo admin puede crear usuarios
+        if ($action === 'save') {
             if ($viewerRole !== Access::ROLE_ADMIN) {
                 Redirect::to('/usuarios.php');
             }
 
+            $id = (int)($_POST['id'] ?? 0);
             $username = (string)($_POST['username'] ?? '');
+            $email = (string)($_POST['email'] ?? '');
             $password = (string)($_POST['password'] ?? '');
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $roles = $_POST['roles'] ?? [];
+            if (!is_array($roles)) $roles = [];
 
-            // Nota: validar inputs y password strength aquí.
-            // El modelo debería encargarse de hashear la contraseña.
-            // IMPORTANTE: asegurar firma correcta del método createUser.
-            // Ejemplo correcto: $this->userModel->createUser($username, $password);
-            $this->userModel->createUser($this->pdo, $username, $password);
-
-            Redirect::to('/usuarios.php');
+            if ($id > 0) {
+                // actualizar
+                $data = [
+                    'username' => $username,
+                    'email' => $email,
+                    'password' => $password, // empty => no change handled by model
+                    'is_active' => $isActive,
+                ];
+                $this->userModel->updateUser($this->pdo, $id, $data);
+                $this->userModel->assignRolesByNames($this->pdo, $id, $roles);
+                Redirect::to('/usuarios.php');
+            } else {
+                // crear
+                $newId = $this->userModel->createUser($this->pdo, $username, $password);
+                $this->userModel->assignRolesByNames($this->pdo, $newId, $roles);
+                Redirect::to('/usuarios.php');
+            }
         }
-
         // --- DELETE (solo Admin) ---
         if ($action === 'delete') {
             if ($viewerRole !== Access::ROLE_ADMIN) {
