@@ -82,7 +82,9 @@ if ($user) {
   <div class="max-w-6xl mx-auto flex justify-between items-center">
     <div class="flex items-center space-x-4">
     <!-- Marca / Identidad -->
-    <div class="text-sm font-semibold">SLSAnt</div>
+    <a href="/index.php" class="inline-flex items-center" aria-label="Ir al inicio" title="SLSAnt">
+      <img src="/slsant-logo.png" alt="SLSAnt" class="h-8 w-auto" />
+    </a>
 
       <?php if ($allowed): ?>
         <?php foreach ($allowed as $key):
