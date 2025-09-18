@@ -30,6 +30,7 @@ if (!isset($debug)) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" type="image/png" href="SLSAnt.png">
   <link rel="stylesheet" href="/assets/css/app.css">
   <title><?php echo htmlentities((string)$title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></title>
 
