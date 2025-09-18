@@ -124,80 +124,7 @@ $canEditGlobal = in_array($userRole, [Access::ROLE_ADMIN, Access::ROLE_GESTOR], 
                         <?php if (!empty($user['username'])): ?> &nbsp;·&nbsp;Usuario: <strong><?php echo htmlentities((string)$user['username'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></strong><?php endif; ?>
                     </p>
                 <?php endif; ?>
-
-                <!-- Información técnica adicional -->
-                <div class="mt-4 p-4 bg-gray-50 border rounded text-xs text-gray-700">
-                    <div class="mb-2"><strong>Entorno</strong></div>
-
-                    <div class="grid grid-cols-1 gap-2">
-                        <div><strong>PHP:</strong> <?php echo htmlentities(PHP_VERSION, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
-                        <div>
-                            <strong>PDO driver:</strong>
-                            <?php
-                            try {
-                                $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-                            } catch (\Throwable $e) {
-                                $driver = '<error>';
-                            }
-                            echo htmlentities((string)$driver, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                            ?>
-                        </div>
-                        <div><strong>Fecha / Hora:</strong> <?php echo htmlentities(date('c'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
-                        <div><strong>Request:</strong> <?php echo htmlentities($_SERVER['REQUEST_METHOD'] ?? 'N/A', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?> <?php echo htmlentities($_SERVER['QUERY_STRING'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
-                        <div><strong>Mem (uso/peak):</strong> <?php echo round(memory_get_usage() / 1024 / 1024, 2) . 'MB / ' . round(memory_get_peak_usage() / 1024 / 1024, 2) . 'MB'; ?></div>
-                    </div>
-
-                    <hr class="my-3" />
-
-                    <div class="mb-2"><strong>Usuario / Permisos</strong></div>
-                    <?php if ($user): ?>
-                        <div class="text-xs text-gray-600 mb-2">
-                            <strong>Roles completos:</strong>
-                            <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($roles ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
-                        </div>
-
-                        <div class="text-xs text-gray-600 mb-2">
-                            <strong>Allowed menu keys:</strong>
-                            <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($allowedKeys ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
-                        </div>
-
-                        <div class="text-xs text-gray-600 mb-2">
-                            <strong>Can edit global:</strong> <?php echo $canEditGlobal ? '<span class="text-green-600">true</span>' : '<span class="text-red-600">false</span>'; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-xs text-gray-600 mb-2">No hay usuario autenticado en la sesión actual.</div>
-                    <?php endif; ?>
-
-                    <hr class="my-3" />
-
-                    <div class="mb-2"><strong>Catálogo</strong></div>
-                    <div class="text-xs text-gray-600">
-                        <strong>Menus catalog keys (count <?php echo count($menusCatalog); ?>):</strong>
-                        <pre class="mt-1 p-2 bg-white border rounded"><?php
-                                                                        $keys = array_keys($menusCatalog ?? []);
-                                                                        echo htmlentities(var_export($keys, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                                                                        ?></pre>
-                    </div>
-
-                    <hr class="my-3" />
-
-                    <div class="mb-2"><strong>Sesión / Request</strong></div>
-                    <div class="text-xs text-gray-600">
-                        <div><strong>Session id:</strong> <?php echo htmlentities(session_id() ?: 'no-session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
-                        <div class="mt-2">
-                            <strong>Session data (trunc.):</strong>
-                            <pre class="mt-1 p-2 bg-white border rounded"><?php
-                                                                            // evitar volcar objetos grandes; truncar la salida razonablemente
-                                                                            $s = $_SESSION ?? [];
-                                                                            $txt = var_export($s, true);
-                                                                            if (strlen($txt) > 5000) $txt = substr($txt, 0, 5000) . "\n...truncated...";
-                                                                            echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-                                                                            ?></pre>
-                        </div>
-                    </div>
-                </div>
             <?php endif; ?>
-
         </header>
 
         <section class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -244,6 +171,81 @@ $canEditGlobal = in_array($userRole, [Access::ROLE_ADMIN, Access::ROLE_GESTOR], 
             <p>Nota: la UI refleja permisos; cada endpoint debe validar permisos server-side con Access::check().</p>
         </footer>
     </main>
+    <?php if (!empty($debug)): ?>
+        <div class="max-w-6xl mx-auto my-8 p-4 bg-white border rounded">
+            <!-- Información técnica adicional -->
+            <div class="mt-4 p-4 bg-gray-50 border rounded text-xs text-gray-700">
+                <div class="mb-2"><strong>Entorno</strong></div>
+
+                <div class="grid grid-cols-1 gap-2">
+                    <div><strong>PHP:</strong> <?php echo htmlentities(PHP_VERSION, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                    <div>
+                        <strong>PDO driver:</strong>
+                        <?php
+                        try {
+                            $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+                        } catch (\Throwable $e) {
+                            $driver = '<error>';
+                        }
+                        echo htmlentities((string)$driver, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        ?>
+                    </div>
+                    <div><strong>Fecha / Hora:</strong> <?php echo htmlentities(date('c'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                    <div><strong>Request:</strong> <?php echo htmlentities($_SERVER['REQUEST_METHOD'] ?? 'N/A', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?> <?php echo htmlentities($_SERVER['QUERY_STRING'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                    <div><strong>Mem (uso/peak):</strong> <?php echo round(memory_get_usage() / 1024 / 1024, 2) . 'MB / ' . round(memory_get_peak_usage() / 1024 / 1024, 2) . 'MB'; ?></div>
+                </div>
+
+                <hr class="my-3" />
+
+                <div class="mb-2"><strong>Usuario / Permisos</strong></div>
+                <?php if ($user): ?>
+                    <div class="text-xs text-gray-600 mb-2">
+                        <strong>Roles completos:</strong>
+                        <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($roles ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+                    </div>
+
+                    <div class="text-xs text-gray-600 mb-2">
+                        <strong>Allowed menu keys:</strong>
+                        <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($allowedKeys ?? [], true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+                    </div>
+
+                    <div class="text-xs text-gray-600 mb-2">
+                        <strong>Can edit global:</strong> <?php echo $canEditGlobal ? '<span class="text-green-600">true</span>' : '<span class="text-red-600">false</span>'; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="text-xs text-gray-600 mb-2">No hay usuario autenticado en la sesión actual.</div>
+                <?php endif; ?>
+
+                <hr class="my-3" />
+
+                <div class="mb-2"><strong>Catálogo</strong></div>
+                <div class="text-xs text-gray-600">
+                    <strong>Menus catalog keys (count <?php echo count($menusCatalog); ?>):</strong>
+                    <pre class="mt-1 p-2 bg-white border rounded"><?php
+                                                                    $keys = array_keys($menusCatalog ?? []);
+                                                                    echo htmlentities(var_export($keys, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                                                                    ?></pre>
+                </div>
+
+                <hr class="my-3" />
+
+                <div class="mb-2"><strong>Sesión / Request</strong></div>
+                <div class="text-xs text-gray-600">
+                    <div><strong>Session id:</strong> <?php echo htmlentities(session_id() ?: 'no-session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+                    <div class="mt-2">
+                        <strong>Session data (trunc.):</strong>
+                        <pre class="mt-1 p-2 bg-white border rounded"><?php
+                                                                        // evitar volcar objetos grandes; truncar la salida razonablemente
+                                                                        $s = $_SESSION ?? [];
+                                                                        $txt = var_export($s, true);
+                                                                        if (strlen($txt) > 5000) $txt = substr($txt, 0, 5000) . "\n...truncated...";
+                                                                        echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                                                                        ?></pre>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
 </body>
 
 </html>
