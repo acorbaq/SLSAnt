@@ -15,6 +15,15 @@ declare(strict_types=1);
  */
 $title = $titleSection ?? 'SLSAnt';
 $extraHead = $extraHead ?? '';
+
+// Normalizar $debug para compatibilidad con vistas que usan $debug variable
+if (!isset($debug)) {
+    if (defined('APP_DEBUG')) {
+        $debug = APP_DEBUG;
+    } else {
+        $debug = filter_var($_ENV['APP_DEBUG'] ?? 'false', FILTER_VALIDATE_BOOLEAN);
+    }
+}
 ?>
 <!doctype html>
 <html lang="es">
