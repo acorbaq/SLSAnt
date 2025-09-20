@@ -122,10 +122,19 @@ final class ElaboradoController
         }
 
         $elaborado = null;
+        $ingredienteElaborado = [];
+        $ingredienteOrigen = [];
         if ($id !== null && $id > 0) {
             // Cargar datos del elaborado; redirigir si no existe
             $elaborado = $this->model->findById($id);
             $ingredienteElaborado = $this->model->getIngredienteElaborado($id);
+            // filtrar para quedarnos solo con las salidas (es_origen=0)
+            $ingredienteOrigen = array_filter($ingredienteElaborado, function ($ie) {
+                return (isset($ie['es_origen']) && (int)$ie['es_origen'] === 1);
+            });
+            $ingredienteElaborado = array_filter($ingredienteElaborado, function ($ie) {
+                return (isset($ie['es_origen']) && (int)$ie['es_origen'] === 0);
+            });
             if ($elaborado === null) { 
                 Redirect::to('/elaborados.php');
             }
