@@ -32,8 +32,8 @@ final class Elaborado
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
-        $this->ingredienteModel = new Ingrediente();
-    }
+        $this->ingredienteModel = new Ingrediente($this->pdo);
+    }   
 
     /**
      * Obtener todos los elaborados.
@@ -212,13 +212,15 @@ final class Elaborado
      */
     public function getIngredienteElaborado(int $idElaborado): array
     {
-        $sql = 'SELECT ei.id_ingrediente, i.nombre, ei.cantidad, ei.id_unidad 
+        $sql = 'SELECT ei.id_ingrediente, i.nombre, ei.cantidad, ei.id_unidad, ei.es_origen
                 FROM elaborados_ingredientes ei
                 JOIN ingredientes i ON ei.id_ingrediente = i.id_ingrediente
                 WHERE ei.id_elaborado = :idElaborado';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':idElaborado' => $idElaborado]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // crear 2 array unidos uno con el ingrediente origen y otro con las salidas
+        
         foreach ($rows as &$r) {
             $r['id_ingrediente'] = isset($r['id_ingrediente']) ? (int)$r['id_ingrediente'] : 0;
             $r['cantidad'] = isset($r['cantidad']) ? (float)$r['cantidad'] : 0.0;
