@@ -51,7 +51,7 @@ require_once __DIR__ . '/../src/bootstrap.php'; // carga autoload, .env, define 
 
 use App\Utils\Auth;
 use App\Utils\Redirect;
-// use App\Controllers\ElaboradoController; // Descomentar cuando exista el controller
+use App\Controllers\ElaboradoController; 
 
 // Iniciar/asegurar la sesión PHP y mecanismos de auth (cookies, token, etc.)
 Auth::initSession();
@@ -90,5 +90,5 @@ require_once __DIR__ . '/views/layouts/nav.php';
  * En este archivo NO se debe implementar la lógica de negocio; sólo la orquestación.
  */
 
-// $controller = new ElaboradoController($pdo);
-// $controller->handleRequest(); // GET/POST - delegar comportamiento aquí
+$controller = new ElaboradoController($pdo);
+$controller->handleRequest(); // GET/POST - delegar comportamiento aquí
