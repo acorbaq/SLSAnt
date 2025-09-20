@@ -77,9 +77,30 @@ $fmtTipo = static function ($t): string {
               <td class="p-3"><?php echo htmlentities($fmtTipo($row['tipo'] ?? 0), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></td>
 
               <td class="p-3">
-                <?php if ($canModify): ?>
-                  <a href="/elaborados.php?modificar&id=<?php echo (int)($row['id_elaborado'] ?? 0); ?>" class="text-blue-600 mr-3">Editar</a>
+                <?php if ($canModify):
+                  // Normalizar "tipo" (ENUM textual o numérico) -> pasar el valor textual esperado por la BDD
+                  $rawTipo = $row['tipo'] ?? '';
+                  if (is_int($rawTipo) || ctype_digit((string)$rawTipo)) {
+                      $tipoParam = ((int)$rawTipo === 1) ? 'escandallo' : 'elaboracion';
+                  } else {
+                      $s = strtolower(trim((string)$rawTipo));
+                      if (in_array($s, ['escandallo','escándallo','escándalo','1'], true)) {
+                          $tipoParam = 'escandallo';
+                      } elseif (in_array($s, ['elaboracion','elaboración','elaborado','0'], true)) {
+                          $tipoParam = 'elaboracion';
+                      } else {
+                          // fallback: usar el propio texto (sanitizado por http_build_query)
+                          $tipoParam = $s;
+                      }
+                  }
 
+                  // Construir query string de forma segura (tipo será p.ej. "escandallo" o "elaboracion")
+                  $qs =  'modificar&' . http_build_query([
+                    'tipo'      => $tipoParam,
+                    'id'        => (int) ($row['id_elaborado'] ?? 0),
+                  ]);
+                ?>
+                  <a href="/elaborados.php?<?php echo $qs; ?>" class="text-blue-600 mr-3">Editar</a>
                   <form method="post" action="/elaborados.php" style="display:inline" onsubmit="return confirm('¿Eliminar este elaborado?');">
                     <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
                     <input type="hidden" name="action" value="delete">
