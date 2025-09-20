@@ -45,6 +45,7 @@ if ($elaborado !== null) {
 
 // Pre-popular si venimos de edición
 $pesoInicialVal = $elaborado['peso_obtenido'] ?? '';
+$origen = $ingredienteOrigen ?? [];
 $salidas = $ingredienteElaborado ?? []; // expected array of ['nombre'=>..., 'peso'=>...]
 // Helper para safe escape
 function h($s)
@@ -58,7 +59,11 @@ function h($s)
     <form method="post" action="/elaborados.php" class="bg-white p-6 rounded shadow" autocomplete="off">
         <!-- Area de selección del ingrediente de origen -->
         <input type="hidden" name="csrf" value="<?php echo h($csrf ?? ''); ?>">
-        <input type="hidden" name="action" value="save_escandallo">
+        <?php if ($isNew): ?>
+            <input type="hidden" name="action" value="save_escandallo">
+        <?php else: ?>
+            <input type="hidden" name="action" value="update_escandallo">
+        <?php endif; ?>
         <input type="hidden" name="id" value="<?php echo (int)($escandallo['id_elaborado'] ?? 0); ?>">
         <!-- Incluye:
      1) Un select con todos los ingredientes ordenados por nombre.
@@ -89,13 +94,43 @@ function h($s)
                     </datalist>
                 <?php endif; ?>
 
-                <?php if ($isEdit): ?>
+<?php if ($isEdit): 
+                    // obtener id y datos desde $origen (puede venir en $origen[0] o $origen)
+                    $idOrigen = (int)($origen[0]['id_ingrediente'] ?? $origen['id_ingrediente'] ?? 0);
+                    $ingOrigen = null;
+                    foreach ($ingredientes as $ing) {
+                        if ((int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0) === $idOrigen) {
+                            $ingOrigen = $ing;
+                            break;
+                        }
+                    }
+                    // fallback a los datos en $origen si no encontramos el ingrediente en la lista
+                    $ingNombre = h($ingOrigen['nombre'] ?? $ingOrigen['name'] ?? $origen[0]['nombre'] ?? '');
+                    $indic = (string)($ingOrigen['indicaciones'] ?? $origen[0]['indicaciones'] ?? '');
+                    $alergenosArr = is_array($ingOrigen['alergenos'] ?? $origen[0]['alergenos'] ?? null) ? ($ingOrigen['alergenos'] ?? $origen[0]['alergenos']) : [];
+                    $alergenosList = [];
+                    foreach ($alergenosArr as $a) {
+                        $alergenosList[] = (string)($a['nombre'] ?? $a['name'] ?? '');
+                    }
+                    $alergenosStr = implode(', ', $alergenosList);
+                ?>
                     <label class="block text-sm font-medium mb-1">Ingrediente origen</label>
                     <div class="p-2 bg-gray-50 border rounded">
-                        <h3 class="text-lg font-medium"><?php echo h($escandallo['nombre'] ?? $elaborado['nombre'] ?? ''); ?></h3>
+                        <h3 class="text-lg font-medium"><?php echo $ingNombre; ?></h3>
                     </div>
-                    <!-- Mantener el origen_id como campo oculto para que el servidor reciba el valor -->
-                    <input type="hidden" name="origen_id" value="<?php echo (int)($escandallo['origen_id'] ?? $elaborado['origen_id'] ?? 0); ?>">
+
+                    <!-- Enviar id al servidor -->
+                    <input type="hidden" name="origen_id" value="<?php echo $idOrigen; ?>">
+
+                    <!-- SELECT oculto SOLO para que el JS lea data-*; la option está marcada selected -->
+                    <select id="origen-select" aria-hidden="true" style="display:none;">
+                        <option value="<?php echo h($idOrigen); ?>"
+                                selected="selected"
+                                data-indic="<?php echo h($indic); ?>"
+                                data-alergenos="<?php echo h($alergenosStr); ?>">
+                            <?php echo $ingNombre; ?>
+                        </option>
+                    </select>
                 <?php else: ?>
                     <select id="origen-select" name="origen_id" required class="w-full px-3 py-2 border">
                         <option value="">-- Selecciona un ingrediente --</option>
@@ -132,6 +167,7 @@ function h($s)
                     value="<?php echo h($pesoInicialVal); ?>">
             </div>
         </div>
+
         <div id="origin-indicaciones" class="text-sm text-gray-600 mb-4">
             <!-- JS llenará este div con indicaciones/alérgenos del ingrediente origen -->
         </div>
@@ -212,7 +248,7 @@ function h($s)
                     <li>ingredientes cargados: <?php echo (int)count($ingredientes); ?></li>
                     <li>origen seleccionado: <?php echo h($elaborado['nombre'] ?? 'ninguno'); ?></li>
                     <li>peso_inicial: <?php echo h($elaborado['peso_obtenido']); ?></li>
-                    <li>n.º salidas: <?php echo (int)count($ingredienteElaborado); ?></li>
+                    <li>n.º salidas: <?php echo h((int)count($ingredienteElaborado) ?? 0); ?></li>
                 </ul>
             </div>
 
@@ -220,40 +256,43 @@ function h($s)
 
             <div>
                 <strong>Dump estructurado (seguro)</strong>
-                <pre class="whitespace-pre-wrap text-xs mt-2"><?php
-                                                                // Preparar un volcado que oculte/mascare datos sensibles (csrf)
-                                                                $safe_csrf = isset($csrf) && $csrf !== '' ? substr((string)$csrf, 0, 6) . '...[masked]' : null;
-                                                                $dump = [
-                                                                    'csrf_present' => $safe_csrf,
-                                                                    'escandallo' => $elaborado ?? null,
-                                                                    'peso_inicial' => $pesoInicialVal,
-                                                                    'salidas' => $salidas,
-                                                                    'ingredientes_count' => count($ingredientes ?? []),
-                                                                ];
-                                                                echo h(print_r($dump, true));
-                                                                ?></pre>
+                <pre class="whitespace-pre-wrap text-xs mt-2">
+                    <?php
+                    // Preparar un volcado que oculte/mascare datos sensibles (csrf)
+                    $safe_csrf = isset($csrf) && $csrf !== '' ? substr((string)$csrf, 0, 6) . '...[masked]' : null;
+                    $dump = [
+                        'csrf_present' => $safe_csrf,
+                        'escandallo' => $elaborado ?? null,
+                        'peso_inicial' => $pesoInicialVal,
+                        'origen' => $origen,
+                        'salidas' => $salidas,
+                        'ingredientes_count' => count($ingredientes ?? []),
+                    ];
+                    echo h(print_r($dump, true));
+                    ?></pre>
             </div>
 
             <hr class="my-3">
 
             <div>
                 <strong>Primeros ingredientes (hasta 20) — vista resumida</strong>
-                <pre class="whitespace-pre-wrap text-xs mt-2"><?php
-                                                                $preview = [];
-                                                                $i = 0;
-                                                                foreach ($ingredientes as $ing) {
-                                                                    if ($i++ >= 20) break;
-                                                                    $preview[] = [
-                                                                        'id' => (int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0),
-                                                                        'nombre' => $ing['nombre'] ?? $ing['name'] ?? '',
-                                                                        'indicaciones' => isset($ing['indicaciones']) ? mb_substr((string)$ing['indicaciones'], 0, 200) : null,
-                                                                        'alergenos' => is_array($ing['alergenos'] ?? null) ? array_map(function ($a) {
-                                                                            return $a['nombre'] ?? $a['name'] ?? '';
-                                                                        }, $ing['alergenos']) : null,
-                                                                    ];
-                                                                }
-                                                                echo h(print_r($preview, true));
-                                                                ?></pre>
+                <pre class="whitespace-pre-wrap text-xs mt-2">
+                    <?php
+                        $preview = [];
+                        $i = 0;
+                        foreach ($ingredientes as $ing) {
+                            if ($i++ >= 20) break;
+                            $preview[] = [
+                                'id' => (int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0),
+                                'nombre' => $ing['nombre'] ?? $ing['name'] ?? '',
+                                'indicaciones' => isset($ing['indicaciones']) ? mb_substr((string)$ing['indicaciones'], 0, 200) : null,
+                                'alergenos' => is_array($ing['alergenos'] ?? null) ? array_map(function ($a) {
+                                    return $a['nombre'] ?? $a['name'] ?? '';
+                                }, $ing['alergenos']) : null,
+                            ];
+                        }
+                        echo h(print_r($preview, true));
+                    ?></pre>
             </div>
 
             <hr class="my-3">
