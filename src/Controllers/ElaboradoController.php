@@ -59,6 +59,14 @@ final class ElaboradoController
     public function handleRequest(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        if ($method === 'POST') {
+            // Procesar mutaciones (crear/guardar)
+            $action = $_POST['action'] ?? '';
+            if ($action === 'save_escandallo') {
+                $this->saveEscandallo();
+                return;
+            }
+        }
         if ($method === 'GET') {
             // Rutas GET
             if (isset($_GET['crear'])) {
@@ -130,10 +138,6 @@ final class ElaboradoController
         require __DIR__ . '/../../public/views/elaborados_edit_view.php';
     }
 
-
-
-
-
     /**
      * canModify
      * 
@@ -158,5 +162,177 @@ final class ElaboradoController
         $principal = Access::highestRole($roles);
         // Permitimos admin, gestor y calidad (calidad es el mínimo)
         return in_array($principal, [Access::ROLE_ADMIN, Access::ROLE_GESTOR, Access::ROLE_CALIDAD], true);
-    }  
+    }
+        /**
+     * saveEscandallo
+     *
+     * Procesa POST action=save_escandallo.
+     * - Validación mínima de inputs.
+     * - Crea registro en `elaborados`.
+     * - Para cada salida: crea un ingrediente nuevo que hereda indicaciones y alérgenos
+     *   del ingrediente origen y añade la relación en `recetas_ingredientes`.
+     *
+     * Notas / supuestos:
+     * - El formulario debe enviar: origen_id, peso_inicial, salida_nombre[] y salida_peso[] y opcional descripcion/nombre.
+     * - fecha_caducidad se deja a la fecha actual (ajustar si necesitas otra lógica).
+     * - Se intenta usar la unidad 'kg' (abreviatura 'kg'); si no existe se usa la primera unidad disponible.
+     *
+     * @return void (redirige al listado al finalizar)
+     */
+    private function saveEscandallo(): void
+    {
+        // CSRF + permisos
+        if (!Csrf::validateToken($_POST['csrf'] ?? '')) {
+            // invalid token
+            http_response_code(400);
+            echo 'CSRF token inválido';
+            return;
+        }
+        if (!$this->canModify()) {
+            Redirect::to('/elaborados.php');
+            return;
+        }
+
+        // Recolectar y validar datos
+        $origenId = isset($_POST['origen_id']) ? (int)$_POST['origen_id'] : 0;
+        $pesoInicial = isset($_POST['peso_inicial']) ? (float)$_POST['peso_inicial'] : 0.0;
+        $salidaNombres = $_POST['salida_nombre'] ?? [];
+        $salidaPesos = $_POST['salida_peso'] ?? [];
+        $descripcion = trim((string)($_POST['descripcion'] ?? ''));
+        $nombreElaborado = trim((string)($_POST['nombre'] ?? ''));
+
+        if ($origenId <= 0) {
+            // origin required
+            $this->renderEditWithError(null, 'Seleccione un ingrediente origen.');
+            return;
+        }
+        if ($pesoInicial <= 0) {
+            $this->renderEditWithError(null, 'Indique el peso inicial válido.');
+            return;
+        }
+        // Normalize salidas
+        $salidas = [];
+        for ($i = 0; $i < max(count($salidaNombres), count($salidaPesos)); $i++) {
+            $n = trim((string)($salidaNombres[$i] ?? ''));
+            $p = isset($salidaPesos[$i]) ? (float)$salidaPesos[$i] : 0.0;
+            if ($n === '' && $p <= 0) continue; // ignorar vacíos
+            if ($n === '') {
+                $this->renderEditWithError(null, 'Cada salida debe tener un nombre.');
+                return;
+            }
+            $salidas[] = ['nombre' => $n, 'peso' => $p];
+        }
+        if (empty($salidas)) {
+            $this->renderEditWithError(null, 'Añada al menos una salida para el escandallo.');
+            return;
+        }
+
+        // Coger datos del ingrediente origen (indicaciones + alérgenos)
+        $origen = $this->ingredienteModel->findById($this->pdo, $origenId);
+        if ($origen === null) {
+            $this->renderEditWithError(null, 'Ingrediente origen no encontrado.');
+            return;
+        }
+        $origenIndicaciones = $origen['indicaciones'] ?? '';
+        // extraer ids de alergenos (soportar distintos formatos)
+        $alergenosOrigen = $origen['alergenos'] ?? [];
+        $alergenosIds = [];
+        foreach ($alergenosOrigen as $a) {
+            if (isset($a['id_alergeno'])) $alergenosIds[] = (int)$a['id_alergeno'];
+            elseif (isset($a['id'])) $alergenosIds[] = (int)$a['id'];
+            elseif (isset($a['id_alergeno'])) $alergenosIds[] = (int)$a['id_alergeno'];
+        }
+
+        // unidad kg id
+        $stmt = $this->pdo->prepare("SELECT id_unidad FROM unidades_medida WHERE abreviatura = :abr LIMIT 1");
+        $stmt->execute([':abr' => 'kg']);
+        $unitRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        $idUnidadKg = $unitRow ? (int)$unitRow['id_unidad'] : null;
+        if ($idUnidadKg === null) {
+            // fallback: primera unidad disponible
+            $stmt = $this->pdo->query("SELECT id_unidad FROM unidades_medida LIMIT 1");
+            $r = $stmt->fetch(PDO::FETCH_ASSOC);
+            $idUnidadKg = $r ? (int)$r['id_unidad'] : 1;
+        }
+
+        // Nombre del elaborado por defecto si no se proporciona
+        if ($nombreElaborado === '') {
+            $nombreElaborado = ($origen['nombre'] ?? 'Escandallo') . ' - escandallo';
+        }
+
+        // Transacción: crear elaborado, crear ingredientes salidas y relaciones
+        $this->pdo->beginTransaction();
+        try {
+            // Insertar elaborado
+            $fechaCad = date('Y-m-d'); // ajustar lógica si hace falta
+            $pesoObtenido = $pesoInicial;
+            $insEl = $this->pdo->prepare("INSERT INTO elaborados (nombre, descripcion, peso_obtenido, fecha_caducidad, tipo) VALUES (:n,:d,:p,:f,:t)");
+            $insEl->execute([
+                ':n' => $nombreElaborado,
+                ':d' => $descripcion,
+                ':p' => $pesoObtenido,
+                ':f' => $fechaCad,
+                ':t' => 1 // 1 = escandallo
+            ]);
+            $idElaborado = (int)$this->pdo->lastInsertId();
+
+            // Para cada salida: crear ingrediente, copiar alergenos e insertar relación recetas_ingredientes
+            foreach ($salidas as $s) {
+                $nombreSalida = $s['nombre'];
+                $pesoSalida = (float)$s['peso'];
+
+                // crear ingrediente nuevo que hereda indicaciones del origen
+                $newIngId = $this->ingredienteModel->createIngrediente($this->pdo, $nombreSalida, $origenIndicaciones);
+
+                // asignar alérgenos del origen al nuevo ingrediente
+                if (!empty($alergenosIds)) {
+                    $this->ingredienteModel->assignAlergenosByIds($this->pdo, $newIngId, $alergenosIds);
+                }
+
+                // insertar relación elaborados_ingredientes (cantidad = pesoSalida, id_unidad = kg)
+                $insRel = $this->pdo->prepare("INSERT INTO elaborados_ingredientes (id_elaborado,id_ingrediente,cantidad,id_unidad) VALUES (:eid,:iid,:cant,:uid)");
+                $insRel->execute([
+                    ':eid' => $idElaborado,
+                    ':iid' => $newIngId,
+                    ':cant' => $pesoSalida,
+                    ':uid' => $idUnidadKg
+                ]);
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            // log error si se dispone de logger; aquí devolvemos error mínimo
+            http_response_code(500);
+            echo 'Error guardando escandallo: ' . htmlentities($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE);
+            return;
+        }
+
+        // Ok: redirigir al listado
+        Redirect::to('/elaborados.php');
+    }
+
+    /**
+     * renderEditWithError
+     *
+     * Auxiliar para re-renderizar el formulario de edición/creación con un mensaje de error.
+     *
+     * @param int|null $id
+     * @param string $msg
+     * @return void
+     */
+    private function renderEditWithError(?int $id, string $msg): void
+    {
+        // Cargar datos auxiliares como en renderEdit
+        $elaborado = null;
+        if ($id !== null && $id > 0) {
+            $elaborado = $this->model->findById($id);
+        }
+        $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
+        $debug = $this->debug;
+        $csrf = Csrf::generateToken();
+        $switchBlockedMessage = $msg;
+        require __DIR__ . '/../../public/views/elaborados_edit_view.php';
+    }
+
 }
