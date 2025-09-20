@@ -6,7 +6,11 @@ namespace App\Controllers;
 use App\Utils\Auth;
 use App\Utils\Access;
 use App\Models\Elaborado;
+use App\Models\Ingrediente;
+
 use PDO;
+use App\Utils\Csrf;
+use App\Utils\Redirect;
 
 /**
  * ElaboradoController
@@ -27,6 +31,7 @@ final class ElaboradoController
 {
     private PDO $pdo;
     private Elaborado $model;
+    private Ingrediente $ingredienteModel;
     private $user;
     private bool $debug;
 
@@ -39,6 +44,7 @@ final class ElaboradoController
     {
         $this->pdo = $pdo;
         $this->model = new Elaborado($pdo);
+        $this->ingredienteModel = new Ingrediente($pdo);
         $this->user = $user;
         $this->debug = $debug;
     }
@@ -54,13 +60,18 @@ final class ElaboradoController
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         if ($method === 'GET') {
-            $this->list();
-            return;
+            // Rutas GET
+            if (isset($_GET['crear'])) {
+                $this->renderEdit(null); // formulario para crear nuevo
+                return;
+            } elseif (isset($_GET['modificar'], $_GET['id']) && ctype_digit((string)$_GET['id'])) {
+                $id = (int)$_GET['id'];
+                $this->renderEdit($id); // formulario para modificar existente
+                return;
+            }
         }
 
-        // Para métodos no soportados por ahora devolvemos 405 mínimo.
-        http_response_code(405);
-        echo 'Method Not Allowed';
+        $this->renderList();
     }
 
     /**
@@ -74,7 +85,7 @@ final class ElaboradoController
      *
      * @return void
      */
-    private function list(): void
+    private function renderList(): void
     {
         $elaborados = $this->model->getAll();
         $canModify = $this->canModify();
@@ -86,6 +97,42 @@ final class ElaboradoController
         // Incluir la vista de listado. Ruta relativa desde src/Controllers a public/views.
         require __DIR__ . '/../../public/views/elaborados_view.php';
     }
+    /** 
+     * renderEdit
+     * 
+     * Renderiza la vista de edición/creación de elaborado.
+     * Reglas:
+     * - Sólo usuarios con permiso (canModify) pueden acceder; si no => redirigir al listado.
+     * - Si $id == null => formulario para crear (vacío).
+     * - Si $id > 0 => cargar elaborado; si no existe => redirigir.
+     */
+    private function renderEdit(?int $id): void
+    {
+        // Seguridad: bloquear el editor si no tiene permisos
+        if (!$this->canModify()) {
+            Redirect::to('/elaborados.php');
+        }
+
+        $elaborado = null;
+        if ($id !== null && $id > 0) {
+            // Cargar datos del elaborado; redirigir si no existe
+            $elaborado = $this->model->findById($id);
+            if ($elaborado === null) { 
+                Redirect::to('/elaborados.php');
+            }
+        }
+        // Datos auxiliares para el formulario
+        $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
+        $debug = defined('APP_DEBUG') && APP_DEBUG === true;
+        $csrf = Csrf::generateToken();
+
+        // Renderizar vista de edición
+        require __DIR__ . '/../../public/views/elaborados_edit_view.php';
+    }
+
+
+
+
 
     /**
      * canModify
