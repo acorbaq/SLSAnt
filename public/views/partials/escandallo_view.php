@@ -24,17 +24,28 @@ declare(strict_types=1);
  *  - array $ingredientes  : listado de ingredientes (cada uno puede tener keys id_ingrediente, nombre, indicaciones, alergenos)
  *  - array|null $escandallo (opcional) : datos cuando se edita (puede contener peso_inicial y salidas)
  */
+
 $ingredientes = $ingredientes ?? [];
 //ordenar ingredientes por nombre
 usort($ingredientes, function ($a, $b) {
     return strcmp($a['nombre'] ?? '', $b['nombre'] ?? '');
 });
-$escandallo = $escandallo ?? null;
+
+
+$elaborado = $elaborado ?? null;
+
+if ($elaborado !== null) {
+    $isEdit = true;
+    $isNew = false;
+} else {
+    $isEdit = false;
+    $isNew = true;
+}
+
 
 // Pre-popular si venimos de edición
-$pesoInicialVal = $escandallo['peso_inicial'] ?? '';
-$salidas = $escandallo['salidas'] ?? []; // expected array of ['nombre'=>..., 'peso'=>...]
-
+$pesoInicialVal = $elaborado['peso_obtenido'] ?? '';
+$salidas = $ingredienteElaborado ?? []; // expected array of ['nombre'=>..., 'peso'=>...]
 // Helper para safe escape
 function h($s)
 {
@@ -59,43 +70,54 @@ function h($s)
         <!-- Agrupar select y peso inicial en una fila con Tailwind -->
         <div class="flex flex-col md:flex-row md:items-end gap-4 mb-4">
             <div class="flex-1">
-                <!-- Buscador por escritura: input con datalist y sincronización con el select -->
-                <label class="block text-sm font-medium mb-1">Buscar ingrediente</label>
-                <input
-                    id="origen-search"
-                    list="ingredientes-datalist"
-                    type="text"
-                    placeholder="Escribe para buscar..."
-                    class="w-full px-3 py-2 border mb-2"
-                    autocomplete="off">
-                <datalist id="ingredientes-datalist">
-                    <?php foreach ($ingredientes as $ing):
-                        $ingName = (string)($ing['nombre'] ?? $ing['name'] ?? '');
-                    ?>
-                        <option value="<?php echo h($ingName); ?>"></option>
-                    <?php endforeach; ?>
-                </datalist>
+                <?php if ($isNew): ?>
+                    <!-- Buscador por escritura: input con datalist y sincronización con el select -->
+                    <label class="block text-sm font-medium mb-1">Buscar ingrediente</label>
+                    <input
+                        id="origen-search"
+                        list="ingredientes-datalist"
+                        type="text"
+                        placeholder="Escribe para buscar..."
+                        class="w-full px-3 py-2 border mb-2"
+                        autocomplete="off">
+                    <datalist id="ingredientes-datalist">
+                        <?php foreach ($ingredientes as $ing):
+                            $ingName = (string)($ing['nombre'] ?? $ing['name'] ?? '');
+                        ?>
+                            <option value="<?php echo h($ingName); ?>"></option>
+                        <?php endforeach; ?>
+                    </datalist>
+                <?php endif; ?>
 
-                <select id="origen-select" name="origen_id" required class="w-full px-3 py-2 border">
-                    <option value="">-- Selecciona un ingrediente --</option>
-                    <?php foreach ($ingredientes as $ing):
-                        $ingId = (int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0);
-                        $ingName = (string)($ing['nombre'] ?? $ing['name'] ?? '');
-                        $selected = ($escandallo !== null && isset($escandallo['origen_id']) && $escandallo['origen_id'] == $ingId) ? 'selected' : '';
-                        $indic = (string)($ing['indicaciones'] ?? '');
-                        $alergenosList = [];
-                        if (is_array($ing['alergenos'] ?? null)) {
-                            foreach ($ing['alergenos'] as $a) {
-                                $alergenosList[] = (string)($a['nombre'] ?? $a['name'] ?? '');
+                <?php if ($isEdit): ?>
+                    <label class="block text-sm font-medium mb-1">Ingrediente origen</label>
+                    <div class="p-2 bg-gray-50 border rounded">
+                        <h3 class="text-lg font-medium"><?php echo h($escandallo['nombre'] ?? $elaborado['nombre'] ?? ''); ?></h3>
+                    </div>
+                    <!-- Mantener el origen_id como campo oculto para que el servidor reciba el valor -->
+                    <input type="hidden" name="origen_id" value="<?php echo (int)($escandallo['origen_id'] ?? $elaborado['origen_id'] ?? 0); ?>">
+                <?php else: ?>
+                    <select id="origen-select" name="origen_id" required class="w-full px-3 py-2 border">
+                        <option value="">-- Selecciona un ingrediente --</option>
+                        <?php foreach ($ingredientes as $ing):
+                            $ingId = (int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0);
+                            $ingName = (string)($ing['nombre'] ?? $ing['name'] ?? '');
+                            $selected = ($elaborado !== null && isset($elaborado['id_elaborado']) && $elaborado['id_elaborado'] == $ingId) ? 'selected' : '';
+                            $indic = (string)($ing['indicaciones'] ?? '');
+                            $alergenosList = [];
+                            if (is_array($ing['alergenos'] ?? null)) {
+                                foreach ($ing['alergenos'] as $a) {
+                                    $alergenosList[] = (string)($a['nombre'] ?? $a['name'] ?? '');
+                                }
                             }
-                        }
-                        $alergenosStr = implode(', ', $alergenosList);
-                    ?>
-                        <option value="<?php echo h($ingId); ?>" <?php echo $selected; ?> data-indic="<?php echo h($indic); ?>" data-alergenos="<?php echo h($alergenosStr); ?>">
-                            <?php echo h($ingName); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                            $alergenosStr = implode(', ', $alergenosList);
+                        ?>
+                            <option value="<?php echo h($ingId); ?>" <?php echo $selected; ?> data-indic="<?php echo h($indic); ?>" data-alergenos="<?php echo h($alergenosStr); ?>">
+                                <?php echo h($ingName); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
             </div>
 
             <div class="w-full md:w-40">
@@ -141,7 +163,7 @@ function h($s)
                     // Renderizar filas existentes
                     foreach ($salidas as $s):
                         $sName = (string)($s['nombre'] ?? '');
-                        $sPeso = (string)($s['peso'] ?? '0');
+                        $sPeso = (string)($s['cantidad'] ?? '0');
                     ?>
                         <div class="flex gap-2 items-center mb-2 js-line-row">
                             <input name="salida_nombre[]" type="text" class="border px-2 py-1 w-56" placeholder="Nombre producto" value="<?php echo h($sName); ?>">
@@ -176,16 +198,81 @@ function h($s)
     </form>
 </div>
 
+<?php if (!empty($debug) && $debug === true): ?>
+    <div class="mt-6 p-4 bg-gray-50 border text-sm text-gray-700">
+        <details open>
+            <summary class="font-medium mb-2">DEBUG: estado de la vista escandallo</summary>
 
-<!-- Nota para el controlador: sobre el guardado
-     - Al recibir POST action=save_escandallo el controller debe:
-       1) Validar CSRF y permisos.
-       2) Validar origen_id y peso_inicial.
-       3) Validar salidas (nombres no vacíos, pesos numéricos).
-       4) Crear el registro de elaborado/escandallo (tabla elaborados).
-       5) Para cada salida crear un ingrediente nuevo que herede indicaciones y alérgenos del origen,
-          y registrar la relación elaborado->ingrediente en recetas_ingredientes.
--->
+            <div class="mt-2">
+                <strong>Resumen rápido</strong>
+                <ul class="ml-4 list-disc">
+                    <li>csrf presente: <?php echo isset($csrf) && $csrf !== '' ? 'sí' : 'no'; ?></li>
+                    <li>edicion o nuevo: <?php echo $isEdit ? 'edición' : 'nuevo'; ?></li>
+                    <li>escandallo cargado: <?php echo $elaborado !== null ? 'sí' : 'no'; ?></li>
+                    <li>ingredientes cargados: <?php echo (int)count($ingredientes); ?></li>
+                    <li>origen seleccionado: <?php echo h($elaborado['nombre'] ?? 'ninguno'); ?></li>
+                    <li>peso_inicial: <?php echo h($elaborado['peso_obtenido']); ?></li>
+                    <li>n.º salidas: <?php echo (int)count($ingredienteElaborado); ?></li>
+                </ul>
+            </div>
+
+            <hr class="my-3">
+
+            <div>
+                <strong>Dump estructurado (seguro)</strong>
+                <pre class="whitespace-pre-wrap text-xs mt-2"><?php
+                                                                // Preparar un volcado que oculte/mascare datos sensibles (csrf)
+                                                                $safe_csrf = isset($csrf) && $csrf !== '' ? substr((string)$csrf, 0, 6) . '...[masked]' : null;
+                                                                $dump = [
+                                                                    'csrf_present' => $safe_csrf,
+                                                                    'escandallo' => $elaborado ?? null,
+                                                                    'peso_inicial' => $pesoInicialVal,
+                                                                    'salidas' => $salidas,
+                                                                    'ingredientes_count' => count($ingredientes ?? []),
+                                                                ];
+                                                                echo h(print_r($dump, true));
+                                                                ?></pre>
+            </div>
+
+            <hr class="my-3">
+
+            <div>
+                <strong>Primeros ingredientes (hasta 20) — vista resumida</strong>
+                <pre class="whitespace-pre-wrap text-xs mt-2"><?php
+                                                                $preview = [];
+                                                                $i = 0;
+                                                                foreach ($ingredientes as $ing) {
+                                                                    if ($i++ >= 20) break;
+                                                                    $preview[] = [
+                                                                        'id' => (int)($ing['id_ingrediente'] ?? $ing['id'] ?? 0),
+                                                                        'nombre' => $ing['nombre'] ?? $ing['name'] ?? '',
+                                                                        'indicaciones' => isset($ing['indicaciones']) ? mb_substr((string)$ing['indicaciones'], 0, 200) : null,
+                                                                        'alergenos' => is_array($ing['alergenos'] ?? null) ? array_map(function ($a) {
+                                                                            return $a['nombre'] ?? $a['name'] ?? '';
+                                                                        }, $ing['alergenos']) : null,
+                                                                    ];
+                                                                }
+                                                                echo h(print_r($preview, true));
+                                                                ?></pre>
+            </div>
+
+            <hr class="my-3">
+
+            <div>
+                <strong>Contenido POST (si existe, con csrf enmascarado)</strong>
+                <pre class="whitespace-pre-wrap text-xs mt-2"><?php
+                                                                if (!empty($_POST)) {
+                                                                    $post = $_POST;
+                                                                    if (isset($post['csrf'])) $post['csrf'] = substr((string)$post['csrf'], 0, 6) . '...[masked]';
+                                                                    echo h(print_r($post, true));
+                                                                } else {
+                                                                    echo h('No hay datos $_POST');
+                                                                }
+                                                                ?></pre>
+            </div>
+        </details>
+    </div>
+<?php endif; ?>
 
 <!-- Plantilla para clonación -->
 <template id="tpl-salida-row">
@@ -198,55 +285,68 @@ function h($s)
 
 <script src="/js/ui-helper.js"></script>
 <script>
-  (function(){
-    // dynamic list: reutilizable
-    var listManager = AppUIHelpers.initDynamicList({
-      addBtnId: 'add-salida',
-      tplId: 'tpl-salida-row',
-      listId: 'salidas-list',
-      onAdded: function(){ sumCalc.calc(); },
-      onRemoved: function(){ sumCalc.calc(); }
-    });
+    (function() {
+        // dynamic list: reutilizable
+        var listManager = AppUIHelpers.initDynamicList({
+            addBtnId: 'add-salida',
+            tplId: 'tpl-salida-row',
+            listId: 'salidas-list',
+            onAdded: function() {
+                sumCalc.calc();
+            },
+            onRemoved: function() {
+                sumCalc.calc();
+            }
+        });
 
-    // bind filter input -> select
-    AppUIHelpers.bindFilterInput({
-      inputId: 'origen-search',
-      selectId: 'origen-select'
-    });
+        // bind filter input -> select
+        AppUIHelpers.bindFilterInput({
+            inputId: 'origen-search',
+            selectId: 'origen-select'
+        });
 
-    // init generic calculator (peso inicial - suma salidas)
-    var sumCalc = AppUIHelpers.initSumCalculator({
-      pesoInicialId: 'peso-inicial',
-      restosId: 'restos',
-      rowInputSelector: 'input[name="salida_peso[]"]',
-      decimals: 3
-    });
+        // init generic calculator (peso inicial - suma salidas)
+        var sumCalc = AppUIHelpers.initSumCalculator({
+            pesoInicialId: 'peso-inicial',
+            restosId: 'restos',
+            rowInputSelector: 'input[name="salida_peso[]"]',
+            decimals: 3
+        });
 
-    // --- Mostrar indicaciones / alérgenos del ingrediente origen ---
-    var origenSelect = document.getElementById('origen-select');
-    var originIndic = document.getElementById('origin-indicaciones');
+        // --- Mostrar indicaciones / alérgenos del ingrediente origen ---
+        var origenSelect = document.getElementById('origen-select');
+        var originIndic = document.getElementById('origin-indicaciones');
 
-    function escapeHtml(s){
-      return String(s || '').replace(/[&<>"']/g, function(m){
-        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
-      });
-    }
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, function(m) {
+                return ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                })[m];
+            });
+        }
 
-    function showOriginInfo(){
-      if (!origenSelect || !originIndic) return;
-      var opt = origenSelect.selectedOptions && origenSelect.selectedOptions[0];
-      if (!opt) { originIndic.innerHTML = ''; return; }
-      var indic = opt.dataset.indic || '';
-      var algs = opt.dataset.alergenos || '';
-      var html = '';
-      if (indic) html += '<div><strong>Indicaciones conservación:</strong> ' + escapeHtml(indic) + '</div>';
-      if (algs) html += '<div class="mt-1"><strong>Alérgenos visibles:</strong> ' + escapeHtml(algs) + '</div>';
-      originIndic.innerHTML = html;
-    }
+        function showOriginInfo() {
+            if (!origenSelect || !originIndic) return;
+            var opt = origenSelect.selectedOptions && origenSelect.selectedOptions[0];
+            if (!opt) {
+                originIndic.innerHTML = '';
+                return;
+            }
+            var indic = opt.dataset.indic || '';
+            var algs = opt.dataset.alergenos || '';
+            var html = '';
+            if (indic) html += '<div><strong>Indicaciones conservación:</strong> ' + escapeHtml(indic) + '</div>';
+            if (algs) html += '<div class="mt-1"><strong>Alérgenos visibles:</strong> ' + escapeHtml(algs) + '</div>';
+            originIndic.innerHTML = html;
+        }
 
-    origenSelect && origenSelect.addEventListener('change', showOriginInfo, false);
-    // mostrar info inicial si hay selección
-    showOriginInfo();
+        origenSelect && origenSelect.addEventListener('change', showOriginInfo, false);
+        // mostrar info inicial si hay selección
+        showOriginInfo();
 
-  })();
+    })();
 </script>
