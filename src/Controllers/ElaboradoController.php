@@ -125,6 +125,7 @@ final class ElaboradoController
         if ($id !== null && $id > 0) {
             // Cargar datos del elaborado; redirigir si no existe
             $elaborado = $this->model->findById($id);
+            $ingredienteElaborado = $this->model->getIngredienteElaborado($id);
             if ($elaborado === null) { 
                 Redirect::to('/elaborados.php');
             }
@@ -260,51 +261,20 @@ final class ElaboradoController
             $nombreElaborado = ($origen['nombre'] ?? 'Escandallo') . ' - escandallo';
         }
 
-        // Transacción: crear elaborado, crear ingredientes salidas y relaciones
-        $this->pdo->beginTransaction();
+
         try {
-            // Insertar elaborado
-            $fechaCad = date('Y-m-d'); // ajustar lógica si hace falta
-            $pesoObtenido = $pesoInicial;
-            $insEl = $this->pdo->prepare("INSERT INTO elaborados (nombre, descripcion, peso_obtenido, fecha_caducidad, tipo) VALUES (:n,:d,:p,:f,:t)");
-            $insEl->execute([
-                ':n' => $nombreElaborado,
-                ':d' => $descripcion,
-                ':p' => $pesoObtenido,
-                ':f' => $fechaCad,
-                ':t' => 1 // 1 = escandallo
-            ]);
-            $idElaborado = (int)$this->pdo->lastInsertId();
-
-            // Para cada salida: crear ingrediente, copiar alergenos e insertar relación recetas_ingredientes
-            foreach ($salidas as $s) {
-                $nombreSalida = $s['nombre'];
-                $pesoSalida = (float)$s['peso'];
-
-                // crear ingrediente nuevo que hereda indicaciones del origen
-                $newIngId = $this->ingredienteModel->createIngrediente($this->pdo, $nombreSalida, $origenIndicaciones);
-
-                // asignar alérgenos del origen al nuevo ingrediente
-                if (!empty($alergenosIds)) {
-                    $this->ingredienteModel->assignAlergenosByIds($this->pdo, $newIngId, $alergenosIds);
-                }
-
-                // insertar relación elaborados_ingredientes (cantidad = pesoSalida, id_unidad = kg)
-                $insRel = $this->pdo->prepare("INSERT INTO elaborados_ingredientes (id_elaborado,id_ingrediente,cantidad,id_unidad) VALUES (:eid,:iid,:cant,:uid)");
-                $insRel->execute([
-                    ':eid' => $idElaborado,
-                    ':iid' => $newIngId,
-                    ':cant' => $pesoSalida,
-                    ':uid' => $idUnidadKg
-                ]);
-            }
-
-            $this->pdo->commit();
+            // Delega la creación al modelo (el modelo hace la transacción y lanza excepción si falla)
+            $this->model->createEscandallo(
+                $origenId,
+                $pesoInicial,
+                $salidas,
+                $descripcion,
+                $nombreElaborado,
+                $this->ingredienteModel
+            );
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
-            // log error si se dispone de logger; aquí devolvemos error mínimo
-            http_response_code(500);
-            echo 'Error guardando escandallo: ' . htmlentities($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE);
+            // Renderizar formulario con error amigable
+            $this->renderEditWithError(null, 'Error guardando escandallo: ' . $e->getMessage());
             return;
         }
 
