@@ -50,7 +50,18 @@ $tipo = $_GET['tipo'] ?? null;
         <a href="?crear&tipo=escandallo" class="px-3 py-1 border rounded <?php echo $tipo === 'escandallo' ? 'bg-teal-100' : ''; ?>">Escandallo</a>
     </div>
     <?php else: ?>
-        <p class="px-3 py-1 border rounded bg-teal-100"><?php $tipo ?></p>
+        <div class="mb-4">
+            <a class="px-3 py-1 border rounded bg-teal-100">
+                <?php
+                $tipoStr = (string) ($tipo ?? '');
+                if ($tipoStr !== '') {
+                    $first = mb_substr($tipoStr, 0, 1, 'UTF-8');
+                    $rest  = mb_substr($tipoStr, 1, null, 'UTF-8');
+                    echo htmlspecialchars(mb_strtoupper($first, 'UTF-8') . $rest, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                }
+                ?>
+            </a>
+        </div>
     <?php endif; ?>
     <?php if ($tipo === null): ?>
         <p class="text-red-600">Por favor, selecciona el tipo de elaborado (Elaboración o Escandallo) para continuar.</p>
