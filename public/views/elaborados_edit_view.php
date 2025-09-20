@@ -33,6 +33,7 @@ if ($elaborado !== null) {
     $isEdit = false;
     $isNew = true;
 }
+
 // obtener get tipo
 $tipo = $_GET['tipo'] ?? null;
 ?>
@@ -43,10 +44,14 @@ $tipo = $_GET['tipo'] ?? null;
         <p class="text-sm text-gray-500"><?= $isEdit ? 'Modifica los detalles del elaborado.' : 'Rellena el formulario para crear un nuevo elaborado.' ?></p>
     </header>
     <!-- Selector simple sin JS: enlaces que añaden ?tipo=... -->
+    <?php if ($isNew): ?>
     <div class="mb-4">
         <a href="?crear&tipo=elaboracion" class="px-3 py-1 border rounded <?php echo $tipo === 'elaboracion' ? 'bg-teal-100' : ''; ?>">Elaboración</a>
         <a href="?crear&tipo=escandallo" class="px-3 py-1 border rounded <?php echo $tipo === 'escandallo' ? 'bg-teal-100' : ''; ?>">Escandallo</a>
     </div>
+    <?php else: ?>
+        <p class="px-3 py-1 border rounded bg-teal-100"><?php $tipo ?></p>
+    <?php endif; ?>
     <?php if ($tipo === null): ?>
         <p class="text-red-600">Por favor, selecciona el tipo de elaborado (Elaboración o Escandallo) para continuar.</p>
     <?php else: 
