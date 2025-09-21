@@ -57,7 +57,7 @@ $fmtTipo = static function ($t): string {
         <tr>
           <th class="p-3">ID</th>
           <th class="p-3">Nombre</th>
-          <th class="p-3">Caducidad</th>
+          <th class="p-3">Viabilidad</th>
           <th class="p-3">Tipo</th>
           <th class="p-3">Acciones</th>
         </tr>
@@ -72,7 +72,7 @@ $fmtTipo = static function ($t): string {
             <tr class="border-t">
               <td class="p-3"><?php echo (int)($row['id_elaborado'] ?? 0); ?></td>
               <td class="p-3"><?php echo htmlentities((string)($row['nombre'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></td>
-              <td class="p-3"><?php echo htmlentities((string)($row['fecha_caducidad'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></td>
+              <td class="p-3"><?php echo htmlentities((string)($row['dias_viabilidad'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?> días</td>
               <td class="p-3"><?php echo htmlentities($fmtTipo($row['tipo'] ?? 0), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></td>
 
               <td class="p-3">
