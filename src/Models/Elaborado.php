@@ -199,15 +199,15 @@ final class Elaborado
             throw $e;
         }
     }
-
     /**
      * Obtener ingredientes asociados a un elaborado.
      *
-     * Devuelve un array de filas asociativas con las keys:
+     * Devuelve filas con keys:
      *  - id_ingrediente (int)
      *  - nombre (string)
      *  - cantidad (float)
      *  - id_unidad (int)
+     *  - es_origen (int 0/1)
      *
      * @param int $idElaborado
      * @return array<int, array<string,mixed>>
@@ -221,14 +221,144 @@ final class Elaborado
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':idElaborado' => $idElaborado]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        // crear 2 array unidos uno con el ingrediente origen y otro con las salidas
 
         foreach ($rows as &$r) {
             $r['id_ingrediente'] = isset($r['id_ingrediente']) ? (int)$r['id_ingrediente'] : 0;
             $r['cantidad'] = isset($r['cantidad']) ? (float)$r['cantidad'] : 0.0;
             $r['id_unidad'] = isset($r['id_unidad']) ? (int)$r['id_unidad'] : 0;
+            $r['es_origen'] = isset($r['es_origen']) ? (int)$r['es_origen'] : 0;
         }
         unset($r);
+
         return $rows;
+    }
+
+    /**
+     * Obtener IDs de ingredientes de salida asociados a un elaborado.
+     *
+     * @param int $idElaborado
+     * @return array<int>
+     */
+    public function getIdsIngredientesSalida(int $idElaborado): array
+    {
+        $sql = 'SELECT ei.id_ingrediente
+                FROM elaborados_ingredientes ei
+                WHERE ei.id_elaborado = :idElaborado AND (ei.es_origen IS NULL OR ei.es_origen = 0)';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idElaborado' => $idElaborado]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $ids = [];
+        foreach ($rows as $r) {
+            if (isset($r['id_ingrediente'])) {
+                $ids[] = (int)$r['id_ingrediente'];
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Comprobar si un ingrediente está siendo usado en otros elaborados.
+     *
+     * @param int $idIngrediente
+     * @param int $excludeElaboradoId (opcional) id de elaborado a excluir de la comprobación
+     * @return bool true si se usa en otro elaborado, false si no
+     */
+    public function isIngredienteUsedInOtherElaborados(int $idIngrediente, int $excludeElaboradoId = 0): bool
+    {
+        $sql = 'SELECT COUNT(*) as cnt FROM elaborados_ingredientes WHERE id_ingrediente = :idIngrediente';
+        if ($excludeElaboradoId > 0) {
+            $sql .= ' AND id_elaborado != :excludeElaboradoId';
+        }
+        $stmt = $this->pdo->prepare($sql);
+        $params = [':idIngrediente' => $idIngrediente];
+        if ($excludeElaboradoId > 0) {
+            $params[':excludeElaboradoId'] = $excludeElaboradoId;
+        }
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $cnt = isset($row['cnt']) ? (int)$row['cnt'] : 0;
+        return $cnt > 0;
+    }
+
+    /**
+     * Eliminar las líneas de ingredientes asociadas a un elaborado.
+     *
+     * @param int $idElaborado
+     */
+    public function deleteElaboradoLineas(int $idElaborado): void
+    {
+        $sql = 'DELETE FROM elaborados_ingredientes WHERE id_elaborado = :idElaborado';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idElaborado' => $idElaborado]);
+    }
+
+    /**
+     * Eliminar un elaborado por id.
+     *
+     * @param int $idElaborado
+     */
+    public function deleteElaborado(int $idElaborado): void
+    {
+        // Ejecutar dentro de transacción si se quiere agrupar con otras operaciones.
+        $sql = 'DELETE FROM elaborados WHERE id_elaborado = :idElaborado';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idElaborado' => $idElaborado]);
+    }
+
+    /**
+     * Eliminar un escandallo y sus ingredientes de salida si no se usan en otros elaborados.
+     *
+     * Comportamiento:
+     *  - Si algún ingrediente de salida está en uso por otro elaborado => lanza RuntimeException (no borra nada).
+     *  - Si todos los ingredientes de salida son exclusivos de este escandallo, borra cada ingrediente (delegando a Ingrediente::deleteIngrediente),
+     *    borra las relaciones y por último borra el elaborado.
+     *
+     * @param int $idElaborado
+     * @throws \RuntimeException si algún ingrediente de salida está en uso en otro elaborado
+     */
+    public function deleteEscandallo(int $idElaborado): void
+    {
+        // Iniciar transacción para evitar estados intermedios
+        $this->pdo->beginTransaction();
+        try {
+            // Obtener ids de ingredientes de salida
+            $ingredientesIdsSalida = $this->getIdsIngredientesSalida($idElaborado);
+
+            // Comprobar si alguno está en uso por otros elaborados (excluyendo el propio)
+            $usedByOthers = [];
+            foreach ($ingredientesIdsSalida as $id) {
+                if ($this->isIngredienteUsedInOtherElaborados($id, $idElaborado)) {
+                    $usedByOthers[] = $id;
+                }
+            }
+
+            if (!empty($usedByOthers)) {
+                // No hacemos cambios, devolvemos error para que el controlador lo presente
+                $this->pdo->rollBack();
+                throw new \RuntimeException('Los siguientes ingredientes están en uso por otros elaborados: ' . implode(',', $usedByOthers));
+            }
+
+            // Borrar relaciones en elaborados_ingredientes (si quedaron)
+            $this->deleteElaboradoLineas($idElaborado);
+
+            // Todos los ingredientes de salida son exclusivos -> borrarlos
+            foreach ($ingredientesIdsSalida as $existingId) {
+                // delegar borrado de ingrediente y sus relaciones a Ingrediente model
+                $this->ingredienteModel->deleteIngrediente($this->pdo, $existingId);
+            }
+
+            // Borrar el elaborado en sí
+            $this->deleteElaborado($idElaborado);
+
+            $this->pdo->commit();
+            return;
+
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e; // el controlador lo atrapará y lo logueará
+        }
     }
 }
