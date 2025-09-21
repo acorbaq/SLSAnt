@@ -94,7 +94,7 @@ function h($s)
                     </datalist>
                 <?php endif; ?>
 
-<?php if ($isEdit): 
+            <?php if ($isEdit): 
                     // obtener id y datos desde $origen (puede venir en $origen[0] o $origen)
                     $idOrigen = (int)($origen[0]['id_ingrediente'] ?? $origen['id_ingrediente'] ?? 0);
                     $ingOrigen = null;
@@ -166,6 +166,18 @@ function h($s)
                     class="w-full px-3 py-2 border"
                     value="<?php echo h($pesoInicialVal); ?>">
             </div>
+            <!-- Dias de conservación -->
+             <div class="w-full md:w-40">
+                <label class="block text-sm font-medium mb-1">Días de viabilidad</label>
+                <input
+                    id="dias-conservacion"
+                    name="dias_conservacion"
+                    type="number"
+                    step="1"
+                    min="0"
+                    class="w-full px-3 py-2 border"
+                    value="<?php echo h($elaborado['dias_viabilidad'] ?? ''); ?>">
+             </div>
         </div>
 
         <div id="origin-indicaciones" class="text-sm text-gray-600 mb-4">
@@ -178,7 +190,7 @@ function h($s)
             <textarea
                 name="descripcion"
                 class="w-full px-3 py-2 border"
-                rows="3"><?php echo h($escandallo['descripcion'] ?? ''); ?></textarea>
+                rows="3"><?php echo h($elaborado['descripcion'] ?? ''); ?></textarea>
         </div>
         <hr class="my-6">
         <!-- Área de líneas de salida -->
