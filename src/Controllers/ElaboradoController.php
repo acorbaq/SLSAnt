@@ -3,14 +3,13 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Utils\Csrf;
 use App\Utils\Auth;
 use App\Utils\Access;
+use App\Utils\Redirect;
 use App\Models\Elaborado;
 use App\Models\Ingrediente;
-
 use PDO;
-use App\Utils\Csrf;
-use App\Utils\Redirect;
 
 /**
  * ElaboradoController
@@ -32,21 +31,17 @@ final class ElaboradoController
     private PDO $pdo;
     private Elaborado $model;
     private Ingrediente $ingredienteModel;
-    private $user;
-    private bool $debug;
 
     /**
      * @param PDO $pdo
      * @param mixed|null $user Información del usuario actual (opcional)
      * @param bool $debug Flag para mostrar info debug en vistas
      */
-    public function __construct(PDO $pdo, $user = null, bool $debug = false)
+    public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
         $this->model = new Elaborado($pdo);
         $this->ingredienteModel = new Ingrediente($pdo);
-        $this->user = $user;
-        $this->debug = $debug;
     }
 
     /**
@@ -68,6 +63,10 @@ final class ElaboradoController
             }
             if ($action === 'update_escandallo') {
                 $this->updateEscandallo();
+                return;
+            }
+            if ($action === 'delete') {
+                $this->deleteElaborado();
                 return;
             }
         }
@@ -101,10 +100,7 @@ final class ElaboradoController
     {
         $elaborados = $this->model->getAll();
         $canModify = $this->canModify();
-
-        // Variables que la vista espera. Si el front controller definió $titleSection/head,
-        // esas partes ya se han incluido; aquí sólo requerimos la vista de contenido.
-        $debug = $this->debug;
+        $debug = defined('APP_DEBUG') && APP_DEBUG === true;
 
         // Incluir la vista de listado. Ruta relativa desde src/Controllers a public/views.
         require __DIR__ . '/../../public/views/elaborados_view.php';
@@ -635,7 +631,7 @@ final class ElaboradoController
                     'user' => $viewerId ?? null
                 ]);
             }
-            if ($this->debug) {
+            if ($debug) {
                 $this->renderEditWithError($elaboradoId, $errMsg);
             } else {
                 $this->renderEditWithError($elaboradoId, 'Error actualizando escandallo. Contacte con el administrador.');
@@ -643,7 +639,126 @@ final class ElaboradoController
             return;
         }
     }
+    /**
+     * deleteElaborado
+     * 
+     * Procesa POST action=delete.
+     * - Valida CSRF y permisos.
+     * - Carga el elaborado para distinguir si es escandallo o no.
+     * - Llama al método adecuado del modelo para borrar.
+     * - Maneja errores esperados (ingredientes en uso) y redirige con mensaje.
+     * 
+     * @return void (redirige al listado al finalizar)
+     */
+    private function deleteElaborado(): void
+    {
+        // CSRF + permisos
+        if (!Csrf::validateToken($_POST['csrf'] ?? '')) {
+            http_response_code(400);
+            echo 'CSRF token inválido';
+            return;
+        }
 
+        $elaboradoId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        if ($elaboradoId <= 0) {
+            Redirect::to('/elaborados.php');
+            return;
+        }
+
+        // Obtener usuario actual (viewer) para auditoría/permisos
+        $viewer = Auth::user($this->pdo);
+        $viewerId = $viewer['id'] ?? null;
+
+        // Comprueba permisos sobre el recurso (mejor pasar el id)
+        if (!$this->canModify($elaboradoId, $viewerId ?? null)) {
+            $this->renderEditWithError($elaboradoId, 'No tiene permisos para eliminar este elaborado.');
+            return;
+        }
+
+        try {
+            // Cargar elaborado para distinguir tipo
+            $elaborado = $this->model->findById($elaboradoId);
+            if ($elaborado === null) {
+                Redirect::to('/elaborados.php');
+                return;
+            }
+            $isEscandallo = isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 1;
+
+            if ($isEscandallo) {
+                // deleteEscandallo maneja su propia transacción y validaciones
+                $this->model->deleteEscandallo($elaboradoId);
+            } else {
+                // deleteElaborado también puede delegar transacción si lo deseas
+                $this->model->deleteElaborado($elaboradoId);
+            }
+
+            // Auditoría (si el proyecto lo usa)
+            if (method_exists($this, 'auditLog')) {
+                $this->auditLog($viewerId ?? null, 'delete_elaborado', ['id_elaborado' => $elaboradoId, 'tipo' => ($isEscandallo ? 'escandallo' : 'elaborado')]);
+            }
+
+            Redirect::to('/elaborados.php');
+            return;
+
+        } catch (\RuntimeException $e) {
+            // Errores esperados (por ejemplo, ingredientes usados en otros elaborados)
+            if (isset($this->logger) && method_exists($this->logger, 'info')) {
+            $this->logger->info('Cancelado borrado elaborado por restricción de uso de ingredientes', [
+                'elaborado' => $elaboradoId,
+                'reason' => $e->getMessage(),
+                'user' => $viewerId ?? null
+            ]);
+            }
+
+            $debug = defined('APP_DEBUG') && APP_DEBUG === true;
+            $rawMsg = $e->getMessage() ?: 'No se puede eliminar el escandallo: algunos ingredientes están en uso por otros elaborados.';
+
+            // Si no estamos en modo debug, devolver un mensaje genérico si el mensaje revela detalles técnicos
+            if (!$debug) {
+            if (preg_match('/\b(SQL|PDO|FOREIGN KEY|constraint|constraint failed|in use|already exists)\b/i', $rawMsg)) {
+                $userMsg = 'No se puede eliminar el escandallo: algunos ingredientes están en uso por otros elaborados.';
+            } else {
+                // Limitar la longitud para no exponer demasiado en la URL
+                $userMsg = mb_strlen($rawMsg) > 200 ? mb_substr($rawMsg, 0, 200) . '...' : $rawMsg;
+            }
+            } else {
+            // En debug incluir clase de excepción para facilitar diagnóstico
+            $userMsg = $rawMsg . ' (' . get_class($e) . ')';
+            }
+
+            Redirect::to('/elaborados.php?error=' . urlencode($userMsg));
+            return;
+
+        } catch (\Throwable $e) {
+            // Log interno con traza completa
+            $errMsg = 'Error borrando elaborado: ' . $e->getMessage();
+            error_log($errMsg . "\n" . $e->getTraceAsString());
+            if (isset($this->logger) && method_exists($this->logger, 'error')) {
+            $this->logger->error('Error borrando elaborado', [
+                'exception' => $e,
+                'elaborado' => $elaboradoId,
+                'user' => $viewerId ?? null
+            ]);
+            }
+
+            $debug = defined('APP_DEBUG') && APP_DEBUG === true;
+            if ($debug) {
+            // Mostrar información útil en debug (acortar traza para la URL)
+            $traceSnippet = mb_substr($e->getTraceAsString(), 0, 1000);
+            $redirMsg = 'Error borrando elaborado: ' . $e->getMessage() . ' | Trace: ' . $traceSnippet;
+            } else {
+            $redirMsg = 'Error borrando elaborado. Contacte con el administrador.';
+            }
+
+            // Evitar URLs excesivamente largas
+            if (mb_strlen($redirMsg) > 1000) {
+            $redirMsg = mb_substr($redirMsg, 0, 1000) . '...';
+            }
+
+            Redirect::to('/elaborados.php?error=' . urlencode($redirMsg));
+            return;
+        }
+    }
 
 
     /**
@@ -672,7 +787,6 @@ final class ElaboradoController
             $elaborado = $this->model->findById($id);
         }
         $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
-        $debug = $this->debug;
         $csrf = Csrf::generateToken();
         $switchBlockedMessage = $msg;
         require __DIR__ . '/../../public/views/elaborados_edit_view.php';
