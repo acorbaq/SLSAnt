@@ -208,6 +208,7 @@ final class ElaboradoController
         $pesoInicial = isset($_POST['peso_inicial']) ? (float)$_POST['peso_inicial'] : 0.0;
         $salidaNombres = $_POST['salida_nombre'] ?? [];
         $salidaPesos = $_POST['salida_peso'] ?? [];
+        $diasConservacion = isset($_POST['dias_conservacion']) ? (int)$_POST['dias_conservacion'] : null;
         $descripcion = trim((string)($_POST['descripcion'] ?? ''));
         $nombreElaborado = trim((string)($_POST['nombre'] ?? ''));
 
@@ -279,6 +280,7 @@ final class ElaboradoController
                 $salidas,
                 $descripcion,
                 $nombreElaborado,
+                $diasConservacion,
                 $this->ingredienteModel
             );
         } catch (\Throwable $e) {
@@ -317,6 +319,7 @@ final class ElaboradoController
         $origenIdInput = isset($_POST['origen_id']) ? (int)$_POST['origen_id'] : null;
         $pesoInicialRaw = $_POST['peso_inicial'] ?? null;
         $descripcionRaw = $_POST['descripcion'] ?? '';
+        $diasConservacionRaw = $_POST['dias_conservacion'] ?? null;
         $restosRaw = $_POST['restos'] ?? null;
 
         if ($elaboradoId <= 0) {
@@ -332,10 +335,11 @@ final class ElaboradoController
             return;
         }
 
-        // Normalizar peso/descripcion/restos
+        // Normalizar peso/descripcion/restos/dias_conservacion
         $pesoInicial = (is_numeric($pesoInicialRaw) ? (float)$pesoInicialRaw : null);
         $descripcion = trim((string)$descripcionRaw);
         $restos = (is_numeric($restosRaw) ? (float)$restosRaw : null);
+        $diasConservacion = (is_numeric($diasConservacionRaw) ? (int)$diasConservacionRaw : null);
 
         // Recoger arrays de salidas: salida_id[], salida_nombre[] y salida_peso[]
         $ids = $_POST['salida_id'] ?? [];
@@ -498,6 +502,10 @@ final class ElaboradoController
             if ($descripcion !== '') {
                 $updateCols[] = "descripcion = :descripcion";
                 $params[':descripcion'] = $descripcion;
+            }
+            if ($diasConservacion !== null && $diasConservacion >= 0) {
+                $updateCols[] = "dias_viabilidad = :dias_conservacion";
+                $params[':dias_conservacion'] = $diasConservacion;
             }
             if (!empty($updateCols)) {
                 $sql = "UPDATE elaborados SET " . implode(', ', $updateCols) . " WHERE id_elaborado = :id_elaborado";
