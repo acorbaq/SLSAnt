@@ -215,25 +215,26 @@ class Ingrediente
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
     }
-
     /**
      * deleteIngrediente
      *
      * Elimina un ingrediente y sus relaciones en la tabla pivot.
      *
-     * Flujo:
-     *  - Borrar filas en ingredientes_alergenos donde id_ingrediente = :id
-     *  - Borrar fila en ingredientes
-     *
      * @param PDO $pdo
      * @param int $id
      * @return void
+     * @throws \Exception on failure
      */
     public function deleteIngrediente(PDO $pdo, int $id): void
     {
-        // Borrar relaciones pivot primero para mantener integridad referencial si no hay FK con cascade
-        $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id")->execute([':id' => $id]);
-        $pdo->prepare("DELETE FROM ingredientes WHERE id_ingrediente = :id")->execute([':id' => $id]);
+        // Asumimos que la transacción la controla quien llama (Elaborado::deleteEscandallo)
+        // Borrar relaciones pivot (ingredientes_alergenos) primero es seguro aunque existan FK ON DELETE CASCADE
+        $stmt = $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id");
+        $stmt->execute([':id' => $id]);
+
+        // Finalmente borrar ingrediente
+        $stmt = $pdo->prepare("DELETE FROM ingredientes WHERE id_ingrediente = :id");
+        $stmt->execute([':id' => $id]);
     }
 
     /**
