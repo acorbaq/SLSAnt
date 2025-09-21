@@ -66,6 +66,10 @@ final class ElaboradoController
                 $this->saveEscandallo();
                 return;
             }
+            if ($action === 'update_escandallo') {
+                $this->updateEscandallo();
+                return;
+            }
         }
         if ($method === 'GET') {
             // Rutas GET
@@ -290,6 +294,357 @@ final class ElaboradoController
         // Ok: redirigir al listado
         Redirect::to('/elaborados.php');
     }
+    /**
+     * Actualiza un escandallo basándose en la estructura POST descrita.
+     * Espera campos:
+     *  - csrf
+     *  - id (id del escandallo)
+     *  - origen_id
+     *  - peso_inicial
+     *  - descripcion
+     *  - salida_nombre[] (array)
+     *  - salida_peso[] (array)
+     *  - restos (opcional)
+     */
+    private function updateEscandallo(): void
+    {
+        // CSRF
+        $csrf = $_POST['csrf'] ?? '';
+        if (!Csrf::validateToken($csrf)) {
+            http_response_code(400);
+            $this->renderEditWithError(null, 'CSRF token inválido.');
+            return;
+        }
+
+        // Recoger inputs básicos
+        $elaboradoId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $origenIdInput = isset($_POST['origen_id']) ? (int)$_POST['origen_id'] : null;
+        $pesoInicialRaw = $_POST['peso_inicial'] ?? null;
+        $descripcionRaw = $_POST['descripcion'] ?? '';
+        $restosRaw = $_POST['restos'] ?? null;
+
+        if ($elaboradoId <= 0) {
+            $this->renderEditWithError(null, 'Identificador de escandallo inválido.');
+            return;
+        }
+
+        $viewer = Auth::user($this->pdo);
+        $viewerId = $viewer['id'] ?? null;
+
+        if (!$this->canModify()) {
+            $this->renderEditWithError($elaboradoId, 'No tiene permisos para modificar este escandallo.');
+            return;
+        }
+
+        // Normalizar peso/descripcion/restos
+        $pesoInicial = (is_numeric($pesoInicialRaw) ? (float)$pesoInicialRaw : null);
+        $descripcion = trim((string)$descripcionRaw);
+        $restos = (is_numeric($restosRaw) ? (float)$restosRaw : null);
+
+        // Recoger arrays de salidas: salida_id[], salida_nombre[] y salida_peso[]
+        $ids = $_POST['salida_id'] ?? [];
+        $nombres = $_POST['salida_nombre'] ?? [];
+        $pesos = $_POST['salida_peso'] ?? [];
+
+        if (!is_array($ids) || !is_array($nombres) || !is_array($pesos)) {
+            $this->renderEditWithError($elaboradoId, 'Formato de salidas inválido.');
+            return;
+        }
+
+        // Emparejar por índice: construir salidas
+        $countIds = count($ids);
+        $countNames = count($nombres);
+        $countPesos = count($pesos);
+        $max = max($countIds, $countNames, $countPesos);
+        $salidas = [];
+        for ($i = 0; $i < $max; $i++) {
+            $rawId = isset($ids[$i]) && $ids[$i] !== '' ? (int)$ids[$i] : null;
+            $rawName = isset($nombres[$i]) ? trim((string)$nombres[$i]) : '';
+            $rawPeso = isset($pesos[$i]) ? $pesos[$i] : null;
+
+            // Omitir entradas vacías (sin nombre y sin peso útil)
+            if ($rawName === '' && ($rawPeso === null || $rawPeso === '')) {
+                continue;
+            }
+
+            $cantidad = (is_numeric($rawPeso) ? (float)$rawPeso : 0.0);
+
+            $salidas[] = [
+                'id' => $rawId,
+                'nombre' => $rawName,
+                'cantidad' => $cantidad,
+            ];
+        }
+
+        if (count($salidas) === 0) {
+            $this->renderEditWithError($elaboradoId, 'Añada al menos una salida para el escandallo.');
+            return;
+        }
+
+        // Requerir que exista al menos una salida con cantidad > 0 (regla de negocio)
+        $anyPositive = false;
+        foreach ($salidas as $s) {
+            if ($s['cantidad'] > 0) {
+                $anyPositive = true;
+                break;
+            }
+        }
+        if (!$anyPositive) {
+            $this->renderEditWithError($elaboradoId, 'Debe haber al menos una salida con cantidad positiva.');
+            return;
+        }
+
+        // Helper: comprobar existencia de columna en una tabla (SQLite)
+        $columnExists = function(string $table, string $column) : bool {
+            $stmt = $this->pdo->prepare("PRAGMA table_info(\"$table\")");
+            $stmt->execute();
+            $cols = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($cols as $c) {
+                if (isset($c['name']) && $c['name'] === $column) return true;
+            }
+            return false;
+        };
+
+        $ingredienteTieneCreadoPor = $columnExists('ingredientes', 'creado_por_elaborado');
+        $elaboradoTieneRestos = $columnExists('elaborados', 'restos');
+
+        try {
+            // Inicio transacción
+            $this->pdo->beginTransaction();
+
+            // Cargar el elaborado (en SQLite el BEGIN TRANSACTION ya serializa)
+            $stmt = $this->pdo->prepare("SELECT * FROM elaborados WHERE id_elaborado = :id_elaborado");
+            $stmt->execute([':id_elaborado' => $elaboradoId]);
+            $elaboradoActual = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$elaboradoActual) {
+                $this->pdo->rollBack();
+                $this->renderEditWithError(null, 'Escandallo no encontrado.');
+                return;
+            }
+
+            // Cargar relaciones ingredientes de este elaborado (no asumimos columnas inexistentes)
+            $stmt = $this->pdo->prepare("
+                SELECT ei.*, i.id_ingrediente, i.nombre AS ing_nombre, i.indicaciones
+                FROM elaborados_ingredientes ei
+                JOIN ingredientes i ON ei.id_ingrediente = i.id_ingrediente
+                WHERE ei.id_elaborado = :id_elaborado
+            ");
+            $stmt->execute([':id_elaborado' => $elaboradoId]);
+            $ingredientesRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Detectar ingrediente origen actual
+            $origenRows = array_filter($ingredientesRows, function ($r) {
+                return isset($r['es_origen']) && (int)$r['es_origen'] === 1;
+            });
+            if (count($origenRows) !== 1) {
+                $this->pdo->rollBack();
+                $this->renderEditWithError($elaboradoId, 'El escandallo debe tener exactamente un ingrediente de origen.');
+                return;
+            }
+            $origenRow = array_values($origenRows)[0];
+            $origenIdActual = (int)$origenRow['id_ingrediente'];
+
+            // Validar que no se cambie el origen
+            if ($origenIdInput !== null && $origenIdInput !== $origenIdActual) {
+                $this->pdo->rollBack();
+                $this->renderEditWithError($elaboradoId, 'No se puede cambiar el ingrediente de origen del escandallo.');
+                return;
+            }
+
+            // Obtener indicaciones del ingrediente origen
+            $stmt = $this->pdo->prepare("SELECT indicaciones FROM ingredientes WHERE id_ingrediente = :id LIMIT 1");
+            $stmt->execute([':id' => $origenIdActual]);
+            $origenMeta = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$origenMeta) {
+                $this->pdo->rollBack();
+                $this->renderEditWithError($elaboradoId, 'Ingrediente origen no encontrado.');
+                return;
+            }
+            $origenIndicaciones = $origenMeta['indicaciones'] ?? '';
+
+            // Obtener ids de alérgenos del origen desde la tabla pivot ingredientes_alergenos
+            $stmt = $this->pdo->prepare("SELECT id_alergeno FROM ingredientes_alergenos WHERE id_ingrediente = :id_ingrediente");
+            $stmt->execute([':id_ingrediente' => $origenIdActual]);
+            $alRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $alergenosIds = [];
+            foreach ($alRows as $ar) { $alergenosIds[] = (int)$ar['id_alergeno']; }
+
+            // Obtener id_unidad para 'kg' (fallback al primero que haya)
+            $stmt = $this->pdo->prepare("SELECT id_unidad FROM unidades_medida WHERE abreviatura = :abr LIMIT 1");
+            $stmt->execute([':abr' => 'kg']);
+            $uRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $idUnidadKg = $uRow ? (int)$uRow['id_unidad'] : null;
+            if ($idUnidadKg === null) {
+                $stmt = $this->pdo->query("SELECT id_unidad FROM unidades_medida LIMIT 1");
+                $r = $stmt->fetch(PDO::FETCH_ASSOC);
+                $idUnidadKg = $r ? (int)$r['id_unidad'] : 1;
+            }
+
+            // Mapear salidas existentes (no origen)
+            $salidasExistentesMap = [];
+            foreach ($ingredientesRows as $r) {
+                if (isset($r['es_origen']) && (int)$r['es_origen'] === 0) {
+                    $salidasExistentesMap[(int)$r['id_ingrediente']] = $r;
+                }
+            }
+
+            // Actualizar campos del elaborado si aplican
+            $updateCols = [];
+            $params = [':id_elaborado' => $elaboradoId];
+            if ($pesoInicial !== null && $pesoInicial >= 0) {
+                $updateCols[] = "peso_obtenido = :peso_obtenido";
+                $params[':peso_obtenido'] = $pesoInicial;
+            }
+            if ($elaboradoTieneRestos && $restos !== null && $restos >= 0) {
+                $updateCols[] = "restos = :restos";
+                $params[':restos'] = $restos;
+            }
+            if ($descripcion !== '') {
+                $updateCols[] = "descripcion = :descripcion";
+                $params[':descripcion'] = $descripcion;
+            }
+            if (!empty($updateCols)) {
+                $sql = "UPDATE elaborados SET " . implode(', ', $updateCols) . " WHERE id_elaborado = :id_elaborado";
+                $stmt = $this->pdo->prepare($sql);
+                $stmt->execute($params);
+            }
+
+            // Procesar salidas: actualizar si vienen IDs, crear si no
+            $salidasInputIds = [];
+            foreach ($salidas as $s) {
+                if (!empty($s['id'])) {
+                    // UPDATE existente — comprobar pertenencia
+                    $salidaId = (int)$s['id'];
+                    if (!isset($salidasExistentesMap[$salidaId])) {
+                        $this->pdo->rollBack();
+                        $this->renderEditWithError($elaboradoId, "La salida con ID {$salidaId} no pertenece a este escandallo.");
+                        return;
+                    }
+
+                    // Actualizar nombre si se envía
+                    if ($s['nombre'] !== null && $s['nombre'] !== '') {
+                        $stmt = $this->pdo->prepare("UPDATE ingredientes SET nombre = :nombre WHERE id_ingrediente = :id");
+                        $stmt->execute([':nombre' => $s['nombre'], ':id' => $salidaId]);
+                    }
+
+                    // Actualizar cantidad e id_unidad en elaborados_ingredientes
+                    $stmt = $this->pdo->prepare("
+                        UPDATE elaborados_ingredientes
+                        SET cantidad = :cantidad, id_unidad = :id_unidad
+                        WHERE id_elaborado = :id_elaborado AND id_ingrediente = :id_ingrediente
+                    ");
+                    $stmt->execute([
+                        ':cantidad' => $s['cantidad'],
+                        ':id_unidad' => $idUnidadKg,
+                        ':id_elaborado' => $elaboradoId,
+                        ':id_ingrediente' => $salidaId,
+                    ]);
+
+                    $salidasInputIds[] = $salidaId;
+                } else {
+                    // Crear ingrediente nuevo (hereda indicaciones y alérgenos del origen)
+                    $stmt = $this->pdo->prepare("INSERT INTO ingredientes (nombre, indicaciones) VALUES (:nombre, :indicaciones)");
+                    $stmt->execute([':nombre' => ($s['nombre'] ?: 'SIN_NOMBRE'), ':indicaciones' => $origenIndicaciones]);
+                    $nuevoId = (int)$this->pdo->lastInsertId();
+
+                    // Copiar alérgenos (tabla pivot)
+                    if (!empty($alergenosIds)) {
+                        $stmtIns = $this->pdo->prepare("INSERT OR IGNORE INTO ingredientes_alergenos (id_ingrediente, id_alergeno) VALUES (:id_ingrediente, :id_alergeno)");
+                        foreach ($alergenosIds as $aid) {
+                            $stmtIns->execute([':id_ingrediente' => $nuevoId, ':id_alergeno' => $aid]);
+                        }
+                    }
+
+                    // Crear relación en elaborados_ingredientes (necesita id_unidad)
+                    $stmt = $this->pdo->prepare("
+                        INSERT INTO elaborados_ingredientes (id_elaborado, id_ingrediente, cantidad, id_unidad, es_origen)
+                        VALUES (:id_elaborado, :id_ingrediente, :cantidad, :id_unidad, 0)
+                    ");
+                    $stmt->execute([
+                        ':id_elaborado' => $elaboradoId,
+                        ':id_ingrediente' => $nuevoId,
+                        ':cantidad' => $s['cantidad'],
+                        ':id_unidad' => $idUnidadKg
+                    ]);
+
+                    // Marcar creador si la columna existe
+                    if ($ingredienteTieneCreadoPor) {
+                        $stmt = $this->pdo->prepare("UPDATE ingredientes SET creado_por_elaborado = :creado WHERE id_ingrediente = :id");
+                        $stmt->execute([':creado' => $elaboradoId, ':id' => $nuevoId]);
+                    }
+
+                    $salidasInputIds[] = $nuevoId;
+                }
+            }
+
+            // Eliminar salidas existentes que ya no aparecen en la request
+            foreach ($salidasExistentesMap as $existingId => $exRow) {
+                if (!in_array($existingId, $salidasInputIds, true)) {
+                    // Eliminar relación primero
+                    $stmt = $this->pdo->prepare("DELETE FROM elaborados_ingredientes WHERE id_elaborado = :id_elaborado AND id_ingrediente = :id_ingrediente");
+                    $stmt->execute([':id_elaborado' => $elaboradoId, ':id_ingrediente' => $existingId]);
+
+                    // Verificar si alguien más usa ese ingrediente
+                    $stmt = $this->pdo->prepare("SELECT COUNT(*) AS cnt FROM elaborados_ingredientes WHERE id_ingrediente = :id_ingrediente");
+                    $stmt->execute([':id_ingrediente' => $existingId]);
+                    $cntRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $cnt = $cntRow ? (int)$cntRow['cnt'] : 0;
+
+                    if ($cnt === 0) {
+                        // Solo borrar el ingrediente si existe la columna creado_por_elaborado y coincide con este elaborado
+                        if ($ingredienteTieneCreadoPor) {
+                            $stmt = $this->pdo->prepare("SELECT creado_por_elaborado FROM ingredientes WHERE id_ingrediente = :id LIMIT 1");
+                            $stmt->execute([':id' => $existingId]);
+                            $meta = $stmt->fetch(PDO::FETCH_ASSOC);
+                            $creadoPor = $meta['creado_por_elaborado'] ?? null;
+                            if ($creadoPor !== null && (int)$creadoPor === $elaboradoId) {
+                                // borrar ingrediente; las filas en ingredientes_alergenos se borrarán por FK ON DELETE CASCADE
+                                $stmt = $this->pdo->prepare("DELETE FROM ingredientes WHERE id_ingrediente = :id");
+                                $stmt->execute([':id' => $existingId]);
+                            }
+                        }
+                        // Si no hay marca de creación, por seguridad NO borramos el ingrediente.
+                    }
+                }
+            }
+
+            // Commit y auditoría
+            $this->pdo->commit();
+
+            if (method_exists($this, 'auditLog')) {
+                $this->auditLog($viewerId ?? null, 'update_elaborado', [
+                    'id_elaborado' => $elaboradoId,
+                    'salidas' => $salidasInputIds,
+                ]);
+            }
+
+            Redirect::to('/elaborados.php');
+            return;
+
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            // Log interno con traza completa
+            $errMsg = 'Error actualizando escandallo: ' . $e->getMessage();
+            error_log($errMsg . "\n" . $e->getTraceAsString());
+            if (isset($this->logger) && method_exists($this->logger, 'error')) {
+                $this->logger->error('Error actualizando escandallo', [
+                    'exception' => $e,
+                    'elaborado' => $elaboradoId,
+                    'user' => $viewerId ?? null
+                ]);
+            }
+            if ($this->debug) {
+                $this->renderEditWithError($elaboradoId, $errMsg);
+            } else {
+                $this->renderEditWithError($elaboradoId, 'Error actualizando escandallo. Contacte con el administrador.');
+            }
+            return;
+        }
+    }
+
+
 
     /**
      * renderEditWithError
@@ -300,8 +655,17 @@ final class ElaboradoController
      * @param string $msg
      * @return void
      */
-    private function renderEditWithError(?int $id, string $msg): void
+    private function renderEditWithError($idOrMsg, string $msg = ''): void
     {
+        // Compatibilidad: si se llamó con un solo argumento string, ajustarlo
+        if (is_string($idOrMsg) && $msg === '') {
+            $msg = $idOrMsg;
+            $id = null;
+        } else {
+            $id = is_null($idOrMsg) ? null : (int)$idOrMsg;
+        }
+
+        error_log("renderEditWithError: $msg");
         // Cargar datos auxiliares como en renderEdit
         $elaborado = null;
         if ($id !== null && $id > 0) {
