@@ -1,7 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Models;
+
 use App\Models\Ingrediente;
 
 use PDO;
@@ -33,7 +35,7 @@ final class Elaborado
     {
         $this->pdo = $pdo;
         $this->ingredienteModel = new Ingrediente($this->pdo);
-    }   
+    }
 
     /**
      * Obtener todos los elaborados.
@@ -220,7 +222,7 @@ final class Elaborado
         $stmt->execute([':idElaborado' => $idElaborado]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         // crear 2 array unidos uno con el ingrediente origen y otro con las salidas
-        
+
         foreach ($rows as &$r) {
             $r['id_ingrediente'] = isset($r['id_ingrediente']) ? (int)$r['id_ingrediente'] : 0;
             $r['cantidad'] = isset($r['cantidad']) ? (float)$r['cantidad'] : 0.0;
