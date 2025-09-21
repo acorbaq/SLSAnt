@@ -64,7 +64,7 @@ function h($s)
         <?php else: ?>
             <input type="hidden" name="action" value="update_escandallo">
         <?php endif; ?>
-        <input type="hidden" name="id" value="<?php echo (int)($escandallo['id_elaborado'] ?? 0); ?>">
+        <input type="hidden" name="id" value="<?php echo (int)($elaborado['id_elaborado'] ?? 0); ?>">
         <!-- Incluye:
      1) Un select con todos los ingredientes ordenados por nombre.
      2) Un campo de peso_inicial (required, numérico).
@@ -202,7 +202,8 @@ function h($s)
                         $sPeso = (string)($s['cantidad'] ?? '0');
                     ?>
                         <div class="flex gap-2 items-center mb-2 js-line-row">
-                            <input name="salida_nombre[]" type="text" class="border px-2 py-1 w-56" placeholder="Nombre producto" value="<?php echo h($sName); ?>">
+                            <input type="hidden" name="salida_id[]" value="<?php echo (int)($s['id_ingrediente'] ?? 0); ?>">
+                            <input name="salida_nombre[]" type="text" class="border px-2 py-1 w-56 bg-gray-100" placeholder="Nombre producto" value="<?php echo h($sName); ?>" <?php if ($isEdit) echo 'readonly'; ?>>
                             <input name="salida_peso[]" type="number" step="0.001" class="border px-2 py-1 w-28" placeholder="kg" value="<?php echo h($sPeso); ?>">
                             <button type="button" class="js-remove-row text-sm text-red-600 ml-2">Eliminar</button>
                         </div>
