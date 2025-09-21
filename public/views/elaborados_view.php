@@ -25,7 +25,6 @@ $csrf = Csrf::generateToken();
 
 $items = $elaborados ?? [];
 $canModify = $canModify ?? false;
-
 /**
  * Normaliza el valor de tipo a etiqueta legible.
  */
@@ -120,22 +119,121 @@ $fmtTipo = static function ($t): string {
 
   <!-- Enlace para volver al panel -->
   <p class="mt-4"><a href="/index.php" class="text-teal-600">Volver al panel</a></p>
-
-  <!-- Depuración: información útil en entorno de desarrollo -->
+</main>
   <?php if (!empty($debug)): ?>
+    <?php
+      // Helper: safe export truncando strings largos y limitando profundidad/elementos
+      $truncate = function($v, $maxLen = 1000) {
+          if (is_string($v)) {
+              if (strlen($v) > $maxLen) return substr($v, 0, $maxLen) . '...truncated...';
+              return $v;
+          }
+          if (is_numeric($v) || is_bool($v) || is_null($v)) return $v;
+          return '[non-scalar]';
+      };
+
+      $safeExport = function($data, $depth = 0) use (&$safeExport, $truncate) {
+          if ($depth > 3) return '[max-depth]';
+          if (is_array($data)) {
+              $out = [];
+              $i = 0;
+              foreach ($data as $k => $v) {
+                  if ($i++ >= 50) { $out['...more...'] = 'truncated after 50 items'; break; }
+                  $out[$k] = $safeExport($v, $depth + 1);
+              }
+              return $out;
+          }
+          if (is_object($data)) {
+              // convertir objeto simple a array con propiedades públicas
+              $arr = [];
+              foreach ((array)$data as $k => $v) {
+                  $arr[$k] = $safeExport($v, $depth + 1);
+              }
+              return ['__object__' => $arr];
+          }
+          return $truncate($data, 2000);
+      };
+
+      // Preparar variables a mostrar
+      $safeGet = $safeExport($_GET ?? []);
+      $safePost = $safeExport(array_diff_key($_POST ?? [], array_flip(['password','passwd','pwd','token','secret','authorization']))); // ocultar claves sensibles comunes
+      $safeServer = $safeExport(array_intersect_key($_SERVER ?? [], array_flip([
+          'REQUEST_METHOD','QUERY_STRING','REQUEST_URI','HTTP_HOST','HTTP_USER_AGENT','REMOTE_ADDR','SERVER_NAME','SERVER_ADDR','SERVER_SOFTWARE','SERVER_PROTOCOL'
+      ])));
+      $itemsFull = $safeExport($items ?? []);
+      $itemsCount = count($items ?? []);
+      $postedCsrf = (string)($_POST['csrf'] ?? '');
+      $currentCsrf = (string)($csrf ?? '');
+      $sessionId = session_id() ?: '<no-session>';
+      $phpVersion = phpversion();
+      $memory = memory_get_usage(true);
+      $memoryPeak = memory_get_peak_usage(true);
+      $canModifyVal = var_export($canModify ?? false, true);
+
+      // Si existe info de usuario pasarla de forma segura
+      $viewerSafe = null;
+      if (isset($user) && is_array($user)) {
+          $viewerSafe = $safeExport(array_diff_key($user, array_flip(['password','passwd','pwd','token','secret','authorization'])));
+      } elseif (isset($viewer) && is_array($viewer)) {
+          $viewerSafe = $safeExport(array_diff_key($viewer, array_flip(['password','passwd','pwd','token','secret','authorization'])));
+      }
+    ?>
     <section class="mt-6 p-4 bg-gray-50 border rounded text-xs text-gray-700">
-      <div class="mb-2"><strong>DEBUG: elaborados</strong> (muestra truncada)</div>
-      <div>
-        <strong>Count:</strong> <?php echo count($items); ?>
+      <div class="mb-2"><strong>DEBUG EXTENDIDO (Elaborados)</strong> — contexto ampliado y saneado</div>
+
+      <div class="grid gap-2">
+        <div><strong>Resumen:</strong> Items mostrados: <?php echo (int)$itemsCount; ?> — canModify: <?php echo htmlentities($canModifyVal, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+
+        <div><strong>Items (primeros 50):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($itemsFull, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+
+        <div>
+          <strong>GET (completo, saneado):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($safeGet, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+
+        <div>
+          <strong>POST (saneado — se ocultan claves sensibles comunes):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($safePost, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+
+        <div>
+          <strong>SERVER (selecto):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($safeServer, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+
+        <div>
+          <strong>CSRF:</strong>
+          <div class="mt-1">Posted: <?php echo htmlentities($postedCsrf === '' ? '<none>' : (substr($postedCsrf,0,128) . (strlen($postedCsrf) > 128 ? '...truncated...' : '')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+          <div>Current token: <?php echo htmlentities($currentCsrf === '' ? '<none>' : (substr($currentCsrf,0,128) . (strlen($currentCsrf) > 128 ? '...truncated...' : '')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+        </div>
+
+        <?php if ($viewerSafe !== null): ?>
+        <div>
+          <strong>Usuario autenticado (saneado):</strong>
+          <pre class="mt-1 p-2 bg-white border rounded"><?php echo htmlentities(var_export($viewerSafe, true), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></pre>
+        </div>
+        <?php endif; ?>
+
+        <div>
+          <strong>Entorno PHP / Sesión:</strong>
+          <div class="mt-1">PHP: <?php echo htmlentities($phpVersion, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?> — Session: <?php echo htmlentities($sessionId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
+          <div>Memory: <?php echo (int)$memory; ?> bytes — Peak: <?php echo (int)$memoryPeak; ?> bytes</div>
+        </div>
+
+        <hr class="my-2" />
+
+        <div>
+          <strong>Recomendaciones rápidas:</strong>
+          <ul class="mt-1 list-disc list-inside text-gray-600">
+            <li>Usar este modo solo en entornos de desarrollo.</li>
+            <li>No mostrar variables sensibles (passwords, tokens) en producción.</li>
+            <li>Si necesita más información (DB, queries) agregar logging en el controller/model.</li>
+          </ul>
+        </div>
       </div>
-      <pre class="mt-2 p-2 bg-white border rounded"><?php
-        $txt = var_export(array_slice($items, 0, 200), true);
-        if (strlen($txt) > 3000) $txt = substr($txt, 0, 3000) . "\n...truncated...";
-        echo htmlentities($txt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-      ?></pre>
     </section>
   <?php endif; ?>
-
-</main>
 </body>
 </html>
