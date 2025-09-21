@@ -51,7 +51,7 @@ final class Elaborado
      */
     public function getAll(): array
     {
-        $sql = 'SELECT id_elaborado, nombre, peso_obtenido, fecha_caducidad, tipo FROM elaborados ORDER BY nombre ASC';
+        $sql = 'SELECT id_elaborado, nombre, peso_obtenido, dias_viabilidad, tipo FROM elaborados ORDER BY nombre ASC';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -75,7 +75,7 @@ final class Elaborado
      */
     public function findById(int $id): ?array
     {
-        $sql = 'SELECT id_elaborado, nombre, peso_obtenido, fecha_caducidad, tipo FROM elaborados WHERE id_elaborado = :id LIMIT 1';
+        $sql = 'SELECT id_elaborado, nombre, peso_obtenido, descripcion, dias_viabilidad, tipo FROM elaborados WHERE id_elaborado = :id LIMIT 1';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -97,7 +97,7 @@ final class Elaborado
      * @return int id del elaborado creado
      * @throws \RuntimeException en caso de error
      */
-    public function createEscandallo(int $origenId, float $pesoInicial, array $salidas, string $descripcion, string $nombre, Ingrediente $ingredienteModel): int
+    public function createEscandallo(int $origenId, float $pesoInicial, array $salidas, string $descripcion, string $nombre, int $diasViabilidad, Ingrediente $ingredienteModel): int
     {
         // validar origen y leer indicaciones + alérgenos desde el modelo Ingrediente
         $origen = $ingredienteModel->findById($this->pdo, $origenId);
@@ -136,14 +136,12 @@ final class Elaborado
 
         $this->pdo->beginTransaction();
         try {
-            // insertar elaborado
-            $fechaCad = date('Y-m-d');
-            $ins = $this->pdo->prepare("INSERT INTO elaborados (nombre, descripcion, peso_obtenido, fecha_caducidad, tipo) VALUES (:n,:d,:p,:f,:t)");
+            $ins = $this->pdo->prepare("INSERT INTO elaborados (nombre, descripcion, peso_obtenido, dias_viabilidad, tipo) VALUES (:n,:d,:p,:f,:t)");
             $ins->execute([
                 ':n' => $nombre,
                 ':d' => $descripcion,
                 ':p' => $pesoInicial,
-                ':f' => $fechaCad,
+                ':f' => $diasViabilidad,
                 ':t' => 1
             ]);
             $idElaborado = (int)$this->pdo->lastInsertId();
