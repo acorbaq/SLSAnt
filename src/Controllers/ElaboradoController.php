@@ -9,6 +9,7 @@ use App\Utils\Access;
 use App\Utils\Redirect;
 use App\Models\Elaborado;
 use App\Models\Ingrediente;
+use App\Models\Unit;
 use PDO;
 
 /**
@@ -31,6 +32,7 @@ final class ElaboradoController
     private PDO $pdo;
     private Elaborado $model;
     private Ingrediente $ingredienteModel;
+    private Unit $unitModel;
 
     /**
      * @param PDO $pdo
@@ -42,6 +44,7 @@ final class ElaboradoController
         $this->pdo = $pdo;
         $this->model = new Elaborado($pdo);
         $this->ingredienteModel = new Ingrediente($pdo);
+        $this->unitModel = new Unit($pdo);
     }
 
     /**
@@ -141,6 +144,7 @@ final class ElaboradoController
         }
         // Datos auxiliares para el formulario
         $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
+        $unidades = $this->unitModel->getAllUnits();
         $debug = defined('APP_DEBUG') && APP_DEBUG === true;
         $csrf = Csrf::generateToken();
 
