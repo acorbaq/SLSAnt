@@ -78,7 +78,6 @@
 
     return { filter: filter, input: input, select: select };
   };
-
   // Generic calculator: sum inputs matching selector and update target
   AppUIHelpers.initSumCalculator = function (cfg) {
     var pesoInicial = document.getElementById(cfg.pesoInicialId);
@@ -107,6 +106,89 @@
     calc();
 
     return { calc: calc };
+  };
+
+  /**
+   * Sincroniza y muestra las indicaciones/alérgenos de los ingredientes que están
+   * presentes en una lista dinámica (por ejemplo lista de filas con inputs name="ingredientes[]").
+   *
+   * cfg:
+   *  - containerId: id del elemento donde renderizar la información (HTML)
+   *  - listId: id del contenedor donde están las filas (tbody o div)
+   *  - selectId: id del <select> oculto que contiene options con data-indic / data-alergenos
+   *
+   * Comportamiento:
+   *  - Detecta los inputs name="ingredientes[]" o elementos .js-ing-id dentro del listId.
+   *  - Busca las opciones correspondientes en selectId por value (id).
+   *  - Renderiza una lista ordenada con nombre, indicaciones y alérgenos.
+   *  - Observa cambios en el listId y actualiza automáticamente (MutationObserver si está disponible).
+   */
+  AppUIHelpers.syncIndicacionesForList = function (cfg) {
+    var container = document.getElementById(cfg.containerId);
+    var listRoot = document.getElementById(cfg.listId);
+    var select = document.getElementById(cfg.selectId);
+    if (!container || !listRoot || !select) {
+      return {
+        render: function () {}
+      };
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, function (m) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+      });
+    }
+
+    function gatherIds() {
+      var ids = [];
+      // prefer hidden inputs with name="ingredientes[]"
+      var inputs = listRoot.querySelectorAll('input[name="ingredientes[]"], input.js-ing-id');
+      inputs.forEach(function (inp) {
+        var v = (inp.value || '').toString().trim();
+        if (v !== '') ids.push(v);
+      });
+      return ids;
+    }
+
+    function render() {
+      var ids = gatherIds();
+      if (ids.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      var parts = [];
+      ids.forEach(function (id) {
+        var opt = select.querySelector('option[value="' + id + '"]');
+        if (!opt) return;
+        var name = opt.dataset && opt.dataset.name ? opt.dataset.name : (opt.textContent || '').trim();
+        var indic = opt.dataset && opt.dataset.indic ? opt.dataset.indic : '';
+        var algs = opt.dataset && opt.dataset.alergenos ? opt.dataset.alergenos : '';
+        var html = '<div class="mb-2 p-2 bg-gray-50 border rounded">';
+        html += '<div class="font-medium">' + escapeHtml(name) + '</div>';
+        if (indic) html += '<div class="text-xs text-gray-700 mt-1"><strong>Indicaciones:</strong> ' + escapeHtml(indic) + '</div>';
+        if (algs) html += '<div class="text-xs text-gray-700 mt-1"><strong>Alérgenos:</strong> ' + escapeHtml(algs) + '</div>';
+        html += '</div>';
+        parts.push(html);
+      });
+      container.innerHTML = parts.join('');
+    }
+
+    // observe mutations on listRoot to re-render automatically
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(function () {
+        render();
+      });
+      mo.observe(listRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['value'] });
+    } else {
+      // fallback: listen click and input events that likely change list
+      listRoot.addEventListener('click', render);
+      listRoot.addEventListener('input', render);
+    }
+
+    // run initial render
+    render();
+
+    return { render: render };
   };
 
   global.AppUIHelpers = AppUIHelpers;
