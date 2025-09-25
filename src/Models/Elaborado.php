@@ -197,6 +197,34 @@ final class Elaborado
             throw $e;
         }
     }
+    public function createElaboracion($nombre,$descripcion,$pesoTotal,$diasViabilidad, $tipo): int //devuelve la id del elaborado creado
+    {
+        // Implementar la lógica para crear una nueva elaboración en la base de datos.
+        $sql = 'INSERT INTO elaborados (nombre, peso_obtenido, descripcion, dias_viabilidad, tipo) 
+                VALUES (:nombre, :peso_obtenido, :descripcion, :dias_viabilidad, :tipo)';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':nombre' => $nombre,
+            ':peso_obtenido' => $pesoTotal,
+            ':descripcion' => $descripcion,
+            ':dias_viabilidad' => $diasViabilidad,
+            ':tipo' => $tipo
+        ]);
+        return (int)$this->pdo->lastInsertId();
+    }
+    public function addIngredienteToElaborado(int $idElaborado, int $idIngrediente, float $cantidad, int $idUnidad, bool $esOrigen = false): void
+    {
+        $sql = 'INSERT INTO elaborados_ingredientes (id_elaborado, id_ingrediente, cantidad, id_unidad, es_origen) 
+                VALUES (:id_elaborado, :id_ingrediente, :cantidad, :id_unidad, :es_origen)';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':id_elaborado' => $idElaborado,
+            ':id_ingrediente' => $idIngrediente,
+            ':cantidad' => $cantidad,
+            ':id_unidad' => $idUnidad,
+            ':es_origen' => $esOrigen ? 1 : 0
+        ]);
+    }
     /**
      * Obtener ingredientes asociados a un elaborado.
      *
@@ -351,12 +379,65 @@ final class Elaborado
 
             $this->pdo->commit();
             return;
-
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e; // el controlador lo atrapará y lo logueará
         }
+    }
+
+    public function deleteElaboracion(int $idElaborado): void
+    {
+        // Obtener información del elaborado
+        $elaborado = $this->findById($idElaborado);
+        if ($elaborado === null) {
+            throw new \RuntimeException('Elaborado no encontrado.');
+        }
+        // Empezar transacción
+        $this->pdo->beginTransaction();
+        try {
+            // Obtener id's de ingedientes asociados que son origen
+            $origenId = $this->origenIngredienteID($idElaborado);
+            // Si origenId es distinto de 0 hay que comprobar si se usa en otros elabordos
+            if ($origenId > 0 && $this->isIngredienteUsedInOtherElaborados($origenId, $idElaborado)) {
+                // No hacemos cambios, devolvemos error para que el controlador lo presente
+                $this->pdo->rollBack();
+                throw new \RuntimeException('El ingrediente origen está en uso por otros elaborados.');
+            }
+            // Eliminar relaciones en elaborados_ingredientes
+            $this->deleteElaboradoLineas($idElaborado);
+            // Si origen id no es nulo, eliminar el ingrediente origen
+            if ($origenId > 0) {
+                // Eliminar la asociación ingrediente_alergenos
+                $this->ingredienteModel->removeAllAlergenosFromIngrediente($this->pdo, $origenId);
+                // Eliminar el ingrediente origen
+                $this->ingredienteModel->deleteIngrediente($this->pdo, $origenId);
+            }
+            // eliminar el elaborado
+            $this->deleteElaborado($idElaborado);
+            // Confirmar transacción
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            // Revertir transacción en caso de error
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+                // Log error
+                error_log($e->getMessage());
+            }
+            throw $e; // el controlador lo atrapará y lo logueará
+        }
+    }
+
+    public function origenIngredienteID(int $idElaborado): int
+    {
+        $sql = 'SELECT id_ingrediente FROM elaborados_ingredientes WHERE id_elaborado = :idElaborado AND es_origen = 1 LIMIT 1';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idElaborado' => $idElaborado]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false || !isset($row['id_ingrediente'])) {
+            return 0;
+        }
+        return (int)$row['id_ingrediente'];
     }
 }
