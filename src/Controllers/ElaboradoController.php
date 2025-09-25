@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Controllers;
@@ -62,6 +63,10 @@ final class ElaboradoController
             $action = $_POST['action'] ?? '';
             if ($action === 'save_escandallo') {
                 $this->saveEscandallo();
+                return;
+            }
+            if ($action === 'save_elaboracion') {
+                $this->saveElaboracion();
                 return;
             }
             if ($action === 'update_escandallo') {
@@ -138,7 +143,7 @@ final class ElaboradoController
             $ingredienteElaborado = array_filter($ingredienteElaborado, function ($ie) {
                 return (isset($ie['es_origen']) && (int)$ie['es_origen'] === 0);
             });
-            if ($elaborado === null) { 
+            if ($elaborado === null) {
                 Redirect::to('/elaborados.php');
             }
         }
@@ -177,7 +182,7 @@ final class ElaboradoController
         // Permitimos admin, gestor y calidad (calidad es el mínimo)
         return in_array($principal, [Access::ROLE_ADMIN, Access::ROLE_GESTOR, Access::ROLE_CALIDAD], true);
     }
-        /**
+    /**
      * saveEscandallo
      *
      * Procesa POST action=save_escandallo.
@@ -296,6 +301,157 @@ final class ElaboradoController
         // Ok: redirigir al listado
         Redirect::to('/elaborados.php');
     }
+
+    /**
+     * Guarda el proceso de elaboración (POST action=save_elaboracion) elaborado_view.php.
+     * - Valida CSRF y permisos.
+     * - Recolecta inputs: id, nombre, peso_total, saveAsIngredient, descripcion, ingredientes[], cantidades[] y unidades[]. 
+     * - Actualiza las tablas elaborados y elaborados_ingredientes. En caso de que exista saveAsIngredient, también crea/actualiza el ingrediente asociado emplando metodos del propio modelo Ingrediente.
+     * 
+     */
+    private function saveElaboracion(): void
+    {
+        // CSRF + permisos
+        if (!Csrf::validateToken($_POST['csrf'] ?? '')) {
+            // invalid token
+            http_response_code(400);
+            echo 'CSRF token inválido';
+            return;
+        }
+        if (!$this->canModify()) {
+            Redirect::to('/elaborados.php');
+            return;
+        }
+        // Recolectar y validar datos
+        $elaboradoId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $nombre = trim((string)($_POST['nombre'] ?? ''));
+        $pesoTotal = isset($_POST['peso_total']) ? (float)$_POST['peso_total'] : 0.0;
+        $diasConservacion = isset($_POST['dias_viabilidad']) ? (int)$_POST['dias_viabilidad'] : null;
+        $saveAsIngredient = isset($_POST['save_as_ingredient']) ? (bool)$_POST['save_as_ingredient'] : false;
+        $descripcion = trim((string)($_POST['descripcion'] ?? ''));
+        $ingredientes = $_POST['ingredientes'] ?? [];
+        $cantidades = $_POST['cantidades'] ?? [];
+        $unidades = $_POST['unidades'] ?? [];
+        if ($elaboradoId > 0) {
+            $this->renderEditWithError(null, 'Para modificar una elaboración, use el formulario de edición.');
+            return;
+        }
+        // El peso total puede ser 0 o más (0 significa que no se especifica)
+        if ($pesoTotal < 0) {
+            $this->renderEditWithError($elaboradoId, 'Indique el peso total válido (0 o más).');
+            return;
+        }
+
+        // Registrar datos con json_encode (fallback a print_r si falla)
+        $encode = function ($data) {
+            $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+            if ($json === false) {
+            return print_r($data, true);
+            }
+            return $json;
+        };
+
+        // Normalize ingredientes | La tabla elaborados_ingredientes tiene los campos id_ingrediente, cantidad y id_unidad
+        $ingredientesData = [];
+        // Los ingredientes pueden tener cantidades vacias en cuyo caso se asinara 0 indicadno que no ha sido especificada o lleva una cantidad de no facil medición
+        // Normalizar a arrays por si los inputs vienen como valores simples (ej. no usan [] en el formulario)
+        $ingredientes = is_array($ingredientes) ? $ingredientes : ($ingredientes === null ? [] : [$ingredientes]);
+        $cantidades = is_array($cantidades) ? $cantidades : ($cantidades === null ? [] : [$cantidades]);
+        $unidades = is_array($unidades) ? $unidades : ($unidades === null ? [] : [$unidades]);
+        $max = max(count($ingredientes), count($cantidades), count($unidades));
+        for ($i = 0; $i < $max; $i++) {
+            error_log("Dentro del loop, i=$i");
+            $id = isset($ingredientes[$i]) && ctype_digit((string)$ingredientes[$i]) ? (int)$ingredientes[$i] : 0;
+            $cantidad = isset($cantidades[$i]) && is_numeric($cantidades[$i]) ? (float)$cantidades[$i] : 0.0;
+            $unidadId = isset($unidades[$i]) && ctype_digit((string)$unidades[$i]) ? (int)$unidades[$i] : 1; // unidad por defecto 1
+            if ($id <= 0) continue; // ignorar vacíos o ids inválidos
+            // Permitimos cantidad 0.0 para indicar que no se especifica
+            $ingredientesData[] = ['id' => $id, 'cantidad' => $cantidad, 'unidad_id' => $unidadId];
+        }
+        if (empty($ingredientesData)) {
+            $this->renderEditWithError($elaboradoId, 'Añada al menos un ingrediente para la elaboración.');
+            return;
+        }
+        $this->pdo->beginTransaction();
+        try {
+            // Si saveAsIngredient es true, también crea/actualiza el ingrediente asociado pero seran funciones delegadas al modelo Ingrediente
+            // Empezamos creando el elaborado como ingrediente si procede
+            if ($saveAsIngredient) {
+                // crear ingrediente asociado o actualizar si ya existe
+                $existing = $this->ingredienteModel->findByName($this->pdo, $nombre);
+                if ($existing !== null) {
+                    // actualizar
+                    $ingredienteModel->updateIngrediente($this->pdo, $existing['id_ingrediente'], $nombre, '', []);
+                    $idIngredienteAsociado = (int)$existing['id_ingrediente'];
+                } else {
+                    // crear nuevo
+                    $idIngredienteAsociado = $this->ingredienteModel->createIngrediente($this->pdo, $nombre, '');
+                }
+                // Creamos una lista de los alergenos asociados a los ingredientes de entrada
+                // para asignarlos al ingrediente empleando el metodo getUniqueAlergenosFromIngredientes del modelo ingrediente solo adminte un array de ids
+                // nuestos ingredientes es un array con arrays asociativos que contienen id_ingrediente, cantidad, id_unidad
+                // extraer ids de los ingredientes de entrada (pueden venir como id_ingrediente o id)
+                $ingIds = [];
+                foreach ($ingredientesData as $it) {
+                    if (isset($it['id_ingrediente'])) {
+                        $ingIds[] = (int)$it['id_ingrediente'];
+                    } elseif (isset($it['id'])) {
+                        $ingIds[] = (int)$it['id'];
+                    }
+                }
+                $ingIds = array_values(array_unique(array_filter($ingIds, function ($v) {
+                    return $v > 0;
+                })));
+
+                // obtener alérgenos únicos de esos ingredientes empleando el método del modelo Ingrediente
+                // Este metodo solicita un array de ids de ingredientes y devuelve un array de ids de alergenos únicos
+                error_log('Ids de ingredientes para alérgenos: ' . $encode($ingIds));
+                $alergenosIds = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($ingIds);
+                error_log('Ids de alérgenos obtenidos: ' . $encode($alergenosIds));
+                if (!empty($alergenosIds)) {
+                    $this->ingredienteModel->assignAlergenosByIds($this->pdo, $idIngredienteAsociado, $alergenosIds);
+                }
+            }
+            // crea la elaboración para la tabla elaborados delengadola en el modelo (nombre, descripción, peso_obtenido, dias_viabilidad y tipo)
+            $idElaborado = $this->model->createElaboracion(
+                $nombre,
+                $descripcion,
+                $pesoTotal,
+                $diasConservacion,
+                0, // tipo 0 = elaboración normal
+            );
+            // ahora actualiza la tabla elaborados_ingredientes con los ingredientes de entrada
+            foreach ($ingredientesData as $ing) {
+                $this->model->addIngredienteToElaborado(
+                    $idElaborado,
+                    $ing['id'],
+                    $ing['cantidad'],
+                    $ing['unidad_id'],
+                    false // es_origen = 0 para ingredientes de elaboración
+                );
+            }
+            // Si saveAsIngredient es true, actualiza añadir elaboración como ingrediente asociado y es_origen=1
+            if ($saveAsIngredient) {
+                $this->model->addIngredienteToElaborado(
+                    $idElaborado,
+                    $idIngredienteAsociado,
+                    0.0, // cantidad 0 para el ingrediente asociado
+                    1,   // id_unidad 1 (unidad por defecto)
+                    true // es_origen = 1 para el ingrediente asociado
+                );
+            }
+            $this->pdo->commit();
+            // Redirigir al listado
+            Redirect::to('/elaborados.php');
+        } catch (\Throwable $e) {
+            // Renderizar formulario con error amigable
+            $this->renderEditWithError($elaboradoId, 'Error guardando elaboración: ' . $e->getMessage());
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return;
+        }
+    }
     /**
      * Actualiza un escandallo basándose en la estructura POST descrita.
      * Espera campos:
@@ -399,7 +555,7 @@ final class ElaboradoController
         }
 
         // Helper: comprobar existencia de columna en una tabla (SQLite)
-        $columnExists = function(string $table, string $column) : bool {
+        $columnExists = function (string $table, string $column): bool {
             $stmt = $this->pdo->prepare("PRAGMA table_info(\"$table\")");
             $stmt->execute();
             $cols = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -471,7 +627,9 @@ final class ElaboradoController
             $stmt->execute([':id_ingrediente' => $origenIdActual]);
             $alRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $alergenosIds = [];
-            foreach ($alRows as $ar) { $alergenosIds[] = (int)$ar['id_alergeno']; }
+            foreach ($alRows as $ar) {
+                $alergenosIds[] = (int)$ar['id_alergeno'];
+            }
 
             // Obtener id_unidad para 'kg' (fallback al primero que haya)
             $stmt = $this->pdo->prepare("SELECT id_unidad FROM unidades_medida WHERE abreviatura = :abr LIMIT 1");
@@ -628,7 +786,6 @@ final class ElaboradoController
 
             Redirect::to('/elaborados.php');
             return;
-
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -700,26 +857,25 @@ final class ElaboradoController
                 // deleteEscandallo maneja su propia transacción y validaciones
                 $this->model->deleteEscandallo($elaboradoId);
             } else {
-                // deleteElaborado también puede delegar transacción si lo deseas
-                $this->model->deleteElaborado($elaboradoId);
+                // deleteElaboracion también puede delegar transacción si lo deseas
+                $this->model->deleteElaboracion($elaboradoId);
             }
 
             // Auditoría (si el proyecto lo usa)
             if (method_exists($this, 'auditLog')) {
-                $this->auditLog($viewerId ?? null, 'delete_elaborado', ['id_elaborado' => $elaboradoId, 'tipo' => ($isEscandallo ? 'escandallo' : 'elaborado')]);
+                $this->auditLog($viewerId ?? null, 'delete_elaboracion', ['id_elaborado' => $elaboradoId, 'tipo' => ($isEscandallo ? 'escandallo' : 'elaboracion')]);
             }
 
             Redirect::to('/elaborados.php');
             return;
-
         } catch (\RuntimeException $e) {
             // Errores esperados (por ejemplo, ingredientes usados en otros elaborados)
             if (isset($this->logger) && method_exists($this->logger, 'info')) {
-            $this->logger->info('Cancelado borrado elaborado por restricción de uso de ingredientes', [
-                'elaborado' => $elaboradoId,
-                'reason' => $e->getMessage(),
-                'user' => $viewerId ?? null
-            ]);
+                $this->logger->info('Cancelado borrado elaborado por restricción de uso de ingredientes', [
+                    'elaborado' => $elaboradoId,
+                    'reason' => $e->getMessage(),
+                    'user' => $viewerId ?? null
+                ]);
             }
 
             $debug = defined('APP_DEBUG') && APP_DEBUG === true;
@@ -727,44 +883,43 @@ final class ElaboradoController
 
             // Si no estamos en modo debug, devolver un mensaje genérico si el mensaje revela detalles técnicos
             if (!$debug) {
-            if (preg_match('/\b(SQL|PDO|FOREIGN KEY|constraint|constraint failed|in use|already exists)\b/i', $rawMsg)) {
-                $userMsg = 'No se puede eliminar el escandallo: algunos ingredientes están en uso por otros elaborados.';
+                if (preg_match('/\b(SQL|PDO|FOREIGN KEY|constraint|constraint failed|in use|already exists)\b/i', $rawMsg)) {
+                    $userMsg = 'No se puede eliminar el escandallo: algunos ingredientes están en uso por otros elaborados.';
+                } else {
+                    // Limitar la longitud para no exponer demasiado en la URL
+                    $userMsg = mb_strlen($rawMsg) > 200 ? mb_substr($rawMsg, 0, 200) . '...' : $rawMsg;
+                }
             } else {
-                // Limitar la longitud para no exponer demasiado en la URL
-                $userMsg = mb_strlen($rawMsg) > 200 ? mb_substr($rawMsg, 0, 200) . '...' : $rawMsg;
-            }
-            } else {
-            // En debug incluir clase de excepción para facilitar diagnóstico
-            $userMsg = $rawMsg . ' (' . get_class($e) . ')';
+                // En debug incluir clase de excepción para facilitar diagnóstico
+                $userMsg = $rawMsg . ' (' . get_class($e) . ')';
             }
 
             Redirect::to('/elaborados.php?error=' . urlencode($userMsg));
             return;
-
         } catch (\Throwable $e) {
             // Log interno con traza completa
             $errMsg = 'Error borrando elaborado: ' . $e->getMessage();
             error_log($errMsg . "\n" . $e->getTraceAsString());
             if (isset($this->logger) && method_exists($this->logger, 'error')) {
-            $this->logger->error('Error borrando elaborado', [
-                'exception' => $e,
-                'elaborado' => $elaboradoId,
-                'user' => $viewerId ?? null
-            ]);
+                $this->logger->error('Error borrando elaborado', [
+                    'exception' => $e,
+                    'elaborado' => $elaboradoId,
+                    'user' => $viewerId ?? null
+                ]);
             }
 
             $debug = defined('APP_DEBUG') && APP_DEBUG === true;
             if ($debug) {
-            // Mostrar información útil en debug (acortar traza para la URL)
-            $traceSnippet = mb_substr($e->getTraceAsString(), 0, 1000);
-            $redirMsg = 'Error borrando elaborado: ' . $e->getMessage() . ' | Trace: ' . $traceSnippet;
+                // Mostrar información útil en debug (acortar traza para la URL)
+                $traceSnippet = mb_substr($e->getTraceAsString(), 0, 1000);
+                $redirMsg = 'Error borrando elaborado: ' . $e->getMessage() . ' | Trace: ' . $traceSnippet;
             } else {
-            $redirMsg = 'Error borrando elaborado. Contacte con el administrador.';
+                $redirMsg = 'Error borrando elaborado. Contacte con el administrador.';
             }
 
             // Evitar URLs excesivamente largas
             if (mb_strlen($redirMsg) > 1000) {
-            $redirMsg = mb_substr($redirMsg, 0, 1000) . '...';
+                $redirMsg = mb_substr($redirMsg, 0, 1000) . '...';
             }
 
             Redirect::to('/elaborados.php?error=' . urlencode($redirMsg));
@@ -803,5 +958,4 @@ final class ElaboradoController
         $switchBlockedMessage = $msg;
         require __DIR__ . '/../../public/views/elaborados_edit_view.php';
     }
-
 }
