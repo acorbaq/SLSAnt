@@ -31,6 +31,21 @@ $pesoTotal = $elaborado['peso_total'] ?? 0.0;
 $elaboracion = $elaborado['nombre'] ?? '';
 $entradas = $ingredienteElaborado ?? [];
 $unidades = $unidades ?? [];
+// localizar  el id de n.c con array filter
+$unidadNCId = null;
+$unidadKgId = null;
+if (!empty($unidades) && is_array($unidades)) {
+    $filtered = array_filter($unidades, fn($u) => (strtolower(trim((string)($u['abreviatura'] ?? ''))) === 'n.c.' || strtolower(trim((string)($u['nombre'] ?? ''))) === 'no especificado'));
+    if (!empty($filtered)) {
+        $unidadNCId = (int) array_values($filtered)[0]['id_unidad'];
+    }
+
+    // localizar id de 'kg' si existe en catálogo (fallback a null)
+    $kgFiltered = array_filter($unidades, fn($u) => in_array(strtolower(trim((string)($u['abreviatura'] ?? ''))), ['kg', 'kilo', 'kilogramo']) || in_array(strtolower(trim((string)($u['nombre'] ?? ''))), ['kilogramo', 'kilo', 'kg']));
+    if (!empty($kgFiltered)) {
+        $unidadKgId = (int) array_values($kgFiltered)[0]['id_unidad'];
+    }
+}
 // Helper para safe escape
 function h($s)
 {
@@ -40,7 +55,7 @@ function h($s)
 <div class="mb-4">
     <label class="block text-sm font-medium mb-1" for="nombre">Nombre del elaborado</label>
     <form method="post" action="/elaborados.php" class="bg-white p-6 rounded shadow" autocomplete="off">
-        <input type="hidden" name="csrf_token" value="<?php echo h($csrf); ?>">
+        <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
         <?php if ($isNew): ?>
             <input type="hidden" name="action" value="save_elaboracion">
         <?php else: ?>
@@ -218,30 +233,52 @@ function h($s)
                                 <input type="hidden" name="ingredientes[]" value="<?php echo (int)($entry['id_ingrediente'] ?? 0); ?>">
                             </td>
                             <td class="p-3 border">
-                                <!-- ahora mostramos input number visible + select de unidades -->
+                                <!-- ahora mostramos input number visible + select de unidades.
+                                     Si no hay cantidad, dejamos el input vacío y la unidad "n.c." -->
                                 <div class="flex items-center gap-2">
+                                    <?php $cantVal = isset($entry['cantidad']) && $entry['cantidad'] !== '' ? h((string)$entry['cantidad']) : ''; ?>
                                     <input
                                         type="number"
                                         name="cantidades[]"
                                         class="js-ing-cant-input px-2 py-1 border w-28"
                                         step="0.01"
                                         min="0"
-                                        value="<?php echo h((string)($entry['cantidad'] ?? '0')); ?>">
+                                        value="<?php echo $cantVal; ?>">
                                     <select name="unidades[]" class="js-ing-unit px-2 py-1 border">
                                         <?php
-                                        $cur = (string)($entry['unidad'] ?? 'kg');
+                                        // determinar id de unidad actual (buscar por id o por abreviatura para compatibilidad)
+                                        $curUnitId = null;
+                                        $curRaw = (string)($entry['unidad'] ?? '');
+                                        // si el valor ya es numérico, usarlo directamente
+                                        if (is_numeric($curRaw) && (int)$curRaw > 0) {
+                                            $curUnitId = (int)$curRaw;
+                                        } else {
+                                            foreach ($unidades as $uItem) {
+                                                if (
+                                                    strtolower((string)($uItem['abreviatura'] ?? '')) === strtolower($curRaw)
+                                                    || strtolower((string)($uItem['nombre'] ?? '')) === strtolower($curRaw)
+                                                ) {
+                                                    $curUnitId = (int)$uItem['id_unidad'];
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if ($curUnitId === null) $curUnitId = $unidadNCId ?: 0;
+
                                         if (!empty($unidades) && is_array($unidades)) {
                                             foreach ($unidades as $uItem) {
-                                                $abbr = (string)($uItem['abreviatura'] ?? $uItem['nombre'] ?? '');
-                                                $name = (string)($uItem['nombre'] ?? $abbr);
-                                                $sel = ($cur === $abbr) ? ' selected' : '';
-                                                echo '<option value="' . h($abbr) . '"' . $sel . '>' . h($name . ' (' . $abbr . ')') . '</option>';
+                                                $uid = (int)($uItem['id_unidad'] ?? 0);
+                                                $label = (string)($uItem['nombre'] ?? $uItem['abreviatura'] ?? $uid);
+                                                $abbr = (string)($uItem['abreviatura'] ?? '');
+                                                $sel = ($uid === $curUnitId) ? ' selected' : '';
+                                                echo '<option value="' . h((string)$uid) . '"' . $sel . '>' . h($label . ($abbr !== '' ? ' (' . $abbr . ')' : '')) . '</option>';
                                             }
                                         } else {
-                                            $opts = ['kg', 'g', 'l', 'ml', 'ud', 'dz', 'caja', 'paq'];
+                                            // fallback legacy: map some common units to arbitrary ids but prefer n.c. = 0
+                                            $opts = [['id' => 0, 'label' => 'n.c.'], ['id' => 1, 'label' => 'kg'], ['id' => 2, 'label' => 'g']];
                                             foreach ($opts as $op) {
-                                                $sel = ($cur === $op) ? ' selected' : '';
-                                                echo '<option value="' . h($op) . '"' . $sel . '>' . h($op) . '</option>';
+                                                $sel = ((int)$op['id'] === (int)$curUnitId) ? ' selected' : '';
+                                                echo '<option value="' . h((string)$op['id']) . '"' . $sel . '>' . h($op['label']) . '</option>';
                                             }
                                         }
                                         ?>
@@ -267,152 +304,176 @@ function h($s)
 </div>
 
 
-    <template id="tpl-ingred-row">
-        <tr class="border-t">
-            <td class="p-3 border">
-                <span class="js-ing-name"></span>
-                <input type="hidden" name="ingredientes[]" class="js-ing-id" value="">
-            </td>
-            <td class="p-3 border">
-                <!-- input visible para cantidad y select de unidades -->
-                <div class="flex items-center gap-2">
-                    <input type="number" name="cantidades[]" class="js-ing-cant-input px-2 py-1 border w-28" step="0.01" min="0" value="">
-                    <select name="unidades[]" class="js-ing-unit px-2 py-1 border">
-                        <?php
-                        // En el template no hay $entry, usamos 'kg' como valor por defecto
-                        $cur = 'kg';
-                        if (!empty($unidades) && is_array($unidades)) {
-                            foreach ($unidades as $uItem) {
-                                $abbr = (string)($uItem['abreviatura'] ?? $uItem['nombre'] ?? '');
-                                $name = (string)($uItem['nombre'] ?? $abbr);
-                                $sel = ($cur === $abbr) ? ' selected' : '';
-                                echo '<option value="' . h($abbr) . '"' . $sel . '>' . h($name . ' (' . $abbr . ')') . '</option>';
-                            }
-                        } else {
-                            $opts = ['kg', 'g', 'l', 'ml', 'ud', 'dz', 'caja', 'paq'];
-                            foreach ($opts as $op) {
-                                $sel = ($cur === $op) ? ' selected' : '';
-                                echo '<option value="' . h($op) . '"' . $sel . '>' . h($op) . '</option>';
-                            }
+<template id="tpl-ingred-row">
+    <tr class="border-t">
+        <td class="p-3 border">
+            <span class="js-ing-name"></span>
+            <input type="hidden" name="ingredientes[]" class="js-ing-id" value="">
+        </td>
+        <td class="p-3 border">
+            <!-- input visible para cantidad y select de unidades (por defecto n.c.) -->
+            <div class="flex items-center gap-2">
+                <input type="number" name="cantidades[]" class="js-ing-cant-input px-2 py-1 border w-28" step="0.01" min="0" value="">
+                <select name="unidades[]" class="js-ing-unit px-2 py-1 border">
+                    <?php
+                    if (!empty($unidades) && is_array($unidades)) {
+                        foreach ($unidades as $uItem) {
+                            $uid = (int)($uItem['id_unidad'] ?? 0);
+                            $label = (string)($uItem['nombre'] ?? $uItem['abreviatura'] ?? $uid);
+                            $abbr = (string)($uItem['abreviatura'] ?? '');
+                            $sel = ($uid === $unidadNCId) ? ' selected' : '';
+                            echo '<option value="' . h((string)$uid) . '"' . $sel . '>' . h($label . ($abbr !== '' ? ' (' . $abbr . ')' : '')) . '</option>';
                         }
-                        ?>
-                    </select>
-                </div>
-            </td>
-            <td class="p-3 border text-center">
-                <button type="button" class="remove-ingredient bg-red-500 text-white px-2 py-1 rounded">Eliminar</button>
-            </td>
-        </tr>
-    </template>
+                    } else {
+                        // fallback: n.c. as 0
+                        echo '<option value="0" selected>n.c.</option>';
+                        echo '<option value="1">kg</option>';
+                        echo '<option value="2">g</option>';
+                    }
+                    ?>
+                </select>
+            </div>
+        </td>
+        <td class="p-3 border text-center">
+            <button type="button" class="remove-ingredient bg-red-500 text-white px-2 py-1 rounded">Eliminar</button>
+        </td>
+    </tr>
+</template>
 
-    <script src="/js/ui-helper.js"></script>
-    <script>
-        (function() {
-            // Delegar filtrado a ui-helper (si está disponible)
-            if (window.AppUIHelpers && typeof AppUIHelpers.bindFilterInput === 'function') {
-                AppUIHelpers.bindFilterInput({
-                    inputId: 'ingrediente-search',
-                    selectId: 'ingrediente-select'
-                });
+<script src="/js/ui-helper.js"></script>
+<script>
+    (function () {
+        if (window.AppUIHelpers && typeof window.AppUIHelpers.attachBackKeyBinding === 'function') {
+            // Guarda la instancia para poder destruir el listener más tarde si se necesita
+            window._backKeyBinding = AppUIHelpers.attachBackKeyBinding({
+                formSelector: 'form[action="/elaborados.php"]'
+            });
+        }
+    })();
+</script>
+<script>
+    // exponer id de kg y nc como globals para que el submit-guard mínimo fuera del IIFE pueda usarlos
+    window.DEFAULT_UNIDAD_NC = <?php echo (int)($unidadNCId ?? 0); ?>;
+    window.DEFAULT_UNIDAD_KG = <?php echo (int)($unidadKgId ?? 0); ?>;
+    
+    (function() {
+        // valor por defecto para unidad "n.c." (id) disponible en JS
+        var DEFAULT_UNIDAD_NC = <?php echo (int)($unidadNCId ?? 0); ?>;
+        // id de 'kg' (si existe en catálogo) para usar como unidad por defecto cuando se proporciona cantidad > 0
+        var DEFAULT_UNIDAD_KG = <?php echo (int)($unidadKgId ?? 0); ?>;
+
+        // Delegar filtrado a ui-helper (si está disponible)
+        if (window.AppUIHelpers && typeof AppUIHelpers.bindFilterInput === 'function') {
+            AppUIHelpers.bindFilterInput({
+                inputId: 'ingrediente-search',
+                selectId: 'ingrediente-select'
+            });
+        }
+
+
+        // Elementos principales
+        var addBtn = document.getElementById('add-ingredient');
+        var searchInput = document.getElementById('ingrediente-search');
+        var hiddenSelect = document.getElementById('ingrediente-select');
+        var cantidadInput = document.getElementById('cantidad');
+        var listBody = document.getElementById('ingredient-list');
+        var tpl = document.getElementById('tpl-ingred-row');
+
+        function findOptionByName(name) {
+            if (!hiddenSelect) return null;
+            name = (name || '').trim();
+            for (var i = 0; i < hiddenSelect.options.length; i++) {
+                var o = hiddenSelect.options[i];
+                if ((o.dataset && (o.dataset.name || '').trim() === name) || (o.textContent || '').trim() === name) return o;
+            }
+            return null;
+        }
+
+        // Ajustada: Ignorar inputs vacíos (n.c.) al sumar el peso total
+        function updatePesoTotal() {
+            var total = 0;
+            document.querySelectorAll('input[name="cantidades[]"]').forEach(function(inp) {
+                var v = (inp.value || '').toString().trim();
+                if (v === '') return; // no contar campos vacíos (n.c.)
+                total += parseFloat(v) || 0;
+            });
+            var pesoField = document.getElementById('peso_total');
+            if (pesoField) pesoField.value = total.toFixed(2);
+        }
+
+ // Añadir ingrediente desde input + datalist/select oculto
+        addBtn && addBtn.addEventListener('click', function() {
+            var nameVal = (searchInput && searchInput.value || '').trim();
+            if (!nameVal) {
+                alert('Seleccione un ingrediente válido.');
+                return;
             }
 
-            // Elementos principales
-            var addBtn = document.getElementById('add-ingredient');
-            var searchInput = document.getElementById('ingrediente-search');
-            var hiddenSelect = document.getElementById('ingrediente-select');
-            var cantidadInput = document.getElementById('cantidad');
-            var listBody = document.getElementById('ingredient-list');
-            var tpl = document.getElementById('tpl-ingred-row');
-
-            function findOptionByName(name) {
-                if (!hiddenSelect) return null;
-                name = (name || '').trim();
-                for (var i = 0; i < hiddenSelect.options.length; i++) {
-                    var o = hiddenSelect.options[i];
-                    if ((o.dataset && (o.dataset.name || '').trim() === name) || (o.textContent || '').trim() === name) return o;
-                }
-                return null;
+            var opt = findOptionByName(nameVal);
+            if (!opt) {
+                alert('Ingrediente no encontrado. Seleccione uno de la lista.');
+                return;
             }
 
-            function updatePesoTotal() {
-                var total = 0;
-                document.querySelectorAll('input[name="cantidades[]"]').forEach(function(inp) {
-                    total += parseFloat(inp.value) || 0;
-                });
-                var pesoField = document.getElementById('peso_total');
-                if (pesoField) pesoField.value = total.toFixed(2);
+            var ingId = (opt.value || '').toString();
+            var ingName = (opt.dataset && opt.dataset.name) ? opt.dataset.name : (opt.textContent || '').trim();
+            var cantidadRaw = (cantidadInput && cantidadInput.value) ? String(cantidadInput.value).trim() : '';
+            var cantidad = cantidadRaw === '' ? null : parseFloat(cantidadRaw);
+
+            // Si se proporciona valor debe ser > 0
+            if (cantidadRaw !== '' && (isNaN(cantidad) || cantidad <= 0)) {
+                alert('Introduce una cantidad válida mayor que 0 o deja vacío para "n.c."');
+                return;
             }
 
-            // Añadir ingrediente desde input + datalist/select oculto
-            addBtn && addBtn.addEventListener('click', function() {
-                var nameVal = (searchInput && searchInput.value || '').trim();
-                if (!nameVal) {
-                    alert('Seleccione un ingrediente válido.');
-                    return;
+            // --- NUEVO: evitar duplicados --- //
+            var existingIds = Array.from(listBody.querySelectorAll('input[name="ingredientes[]"]'))
+                .map(function(i){ return (i.value || '').toString().trim(); });
+            if (existingIds.indexOf(ingId) !== -1) {
+                alert('El ingrediente ya está añadido.');
+                // opcional: poner foco en el ingrediente ya añadido
+                return;
+            }
+            // --- FIN NUEVO --- //
+
+            // clonar template y rellenar
+            var node = tpl.content ? tpl.content.cloneNode(true) : tpl.cloneNode(true);
+            var nameEl = node.querySelector('.js-ing-name');
+            var idInput = node.querySelector('.js-ing-id');
+            var cantInput = node.querySelector('.js-ing-cant-input');
+            var unitSelect = node.querySelector('.js-ing-unit');
+
+            if (nameEl) nameEl.textContent = ingName;
+            if (idInput) idInput.value = ingId;
+            if (cantInput) cantInput.value = (cantidad !== null) ? cantidad.toFixed(2) : '';
+
+            // seleccionar unidad por defecto según reglas de negocio:
+            //  - si se proporcionó cantidad > 0 -> usar kg (si existe en catálogo), si no existir usar primera opción del select
+            //  - si no se proporcionó cantidad (n.c.) -> usar unidad "n.c." (DEFAULT_UNIDAD_NC) si existe, si no usar primera opción del select
+            if (unitSelect) {
+                if (cantidad !== null && cantidad > 0 && DEFAULT_UNIDAD_KG) {
+                    unitSelect.value = String(DEFAULT_UNIDAD_KG);
+                } else if (DEFAULT_UNIDAD_NC) {
+                    unitSelect.value = String(DEFAULT_UNIDAD_NC);
+                } else if (unitSelect.options[0]) {
+                    unitSelect.value = unitSelect.options[0].value;
                 }
+            }
 
-                var opt = findOptionByName(nameVal);
-                if (!opt) {
-                    alert('Ingrediente no encontrado. Seleccione uno de la lista.');
-                    return;
-                }
+            listBody.appendChild(node);
 
-                var ingId = opt.value;
-                var ingName = (opt.dataset && opt.dataset.name) ? opt.dataset.name : (opt.textContent || '').trim();
-                var cantidad = parseFloat(cantidadInput && cantidadInput.value) || 0;
-                if (cantidad <= 0) {
-                    alert('Introduce una cantidad mayor que 0.');
-                    return;
-                }
+            // limpiar
+            if (searchInput) searchInput.value = '';
+            if (cantidadInput) cantidadInput.value = '';
 
-                // clonar template y rellenar
-                var node = tpl.content ? tpl.content.cloneNode(true) : tpl.cloneNode(true);
-                var nameEl = node.querySelector('.js-ing-name');
-                var idInput = node.querySelector('.js-ing-id');
-                var cantSpan = node.querySelector('.js-ing-cant');
-                var cantInput = node.querySelector('.js-ing-cant-input');
-                var unitSelect = node.querySelector('.js-ing-unit');
+           // poner el foco en el buscador para agilizar la entrada de siguientes ingredientes
+           if (searchInput) {
+               try { searchInput.focus(); if (typeof searchInput.select === 'function') searchInput.select(); } catch (e) {}
+           }
 
-                if (nameEl) nameEl.textContent = ingName;
-                if (idInput) idInput.value = ingId;
-                if (cantSpan) cantSpan.textContent = cantidad.toFixed(2);
-                if (cantInput) cantInput.value = cantidad.toFixed(2);
-                if (unitSelect) unitSelect.value = opt.dataset && opt.dataset.unit ? opt.dataset.unit : 'kg';
-
-                listBody.appendChild(node);
-
-                // limpiar
-                if (searchInput) searchInput.value = '';
-                if (cantidadInput) cantidadInput.value = '';
-
-                updatePesoTotal();
-
-                // si existe helper, actualizar panel de indicaciones/alérgenos (el helper observa la lista)
-                if (window.AppUIHelpers && typeof AppUIHelpers.syncIndicacionesForList === 'function') {
-                    // create or refresh (syncIndicacionesForList returns an object but we don't need to keep it)
-                    AppUIHelpers.syncIndicacionesForList({
-                        containerId: 'origin-indicaciones',
-                        listId: 'ingredient-list',
-                        selectId: 'ingrediente-select'
-                    });
-                }
-            }, false);
-
-            // Delegación para eliminar filas
-            listBody && listBody.addEventListener('click', function(e) {
-                var btn = e.target.closest && e.target.closest('.remove-ingredient');
-                if (!btn) return;
-                var row = btn.closest && btn.closest('tr');
-                if (row) {
-                    row.remove();
-                    updatePesoTotal();
-                }
-            }, false);
-
-            // inicializar suma si hay filas preexistentes
             updatePesoTotal();
 
-            // inicializar sync de indicaciones para la lista (el helper observará cambios)
+            // si existe helper, actualizar panel de indicaciones/alérgenos (el helper observa la lista)
             if (window.AppUIHelpers && typeof AppUIHelpers.syncIndicacionesForList === 'function') {
                 AppUIHelpers.syncIndicacionesForList({
                     containerId: 'origin-indicaciones',
@@ -420,5 +481,58 @@ function h($s)
                     selectId: 'ingrediente-select'
                 });
             }
-        })();
-    </script>
+        }, false);
+
+        // Delegación para eliminar filas
+        listBody && listBody.addEventListener('click', function(e) {
+            var btn = e.target.closest && e.target.closest('.remove-ingredient');
+            if (!btn) return;
+            var row = btn.closest && btn.closest('tr');
+            if (row) {
+                row.remove();
+                updatePesoTotal();
+            }
+        }, false);
+
+        // inicializar suma si hay filas preexistentes
+        updatePesoTotal();
+
+        // inicializar sync de indicaciones para la lista (el helper observará cambios)
+        if (window.AppUIHelpers && typeof AppUIHelpers.syncIndicacionesForList === 'function') {
+            AppUIHelpers.syncIndicacionesForList({
+                containerId: 'origin-indicaciones',
+                listId: 'ingredient-list',
+                selectId: 'ingrediente-select'
+            });
+        }
+    })();
+
+    // AVISO AL GUARDAR (mínimo): comprobar ids de unidades y pedir confirmación si hay alguna distinta de kg
+    (function attachMinimalSubmitGuard() {
+        var form = document.querySelector('form[action="/elaborados.php"]');
+        if (!form) return;
+        form.addEventListener('submit', function(ev) {
+            // 1) Comprobar mínimo de ingredientes
+            var ingredientCount = (form.querySelectorAll('input[name="ingredientes[]"]') || []).length;
+            if (ingredientCount < 2) {
+                alert('Debe incluir al menos 2 ingredientes antes de guardar la elaboración.');
+                ev.preventDefault();
+                ev.stopPropagation();
+                return;
+            }
+
+            // 2) Comprobar unidades distintas de kg (si existe id de kg)
+            var kgId = String(window.DEFAULT_UNIDAD_KG || 0);
+            if (!kgId || kgId === '0') return; // sin kg definido no validamos cliente
+            var selects = Array.from(form.querySelectorAll('select[name="unidades[]"]'));
+            if (selects.length === 0) return;
+            var hasNonKg = selects.some(function(s) { return String(s.value) !== kgId; });
+            if (hasNonKg) {
+                if (!confirm('Se han detectado unidades distintas de kg en los ingredientes. Esto puede producir inconsistencias en el cálculo del peso final. ¿Desea continuar y guardar de todos modos?')) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                }
+            }
+        }, false);
+    })();
+</script>
