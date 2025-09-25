@@ -151,6 +151,20 @@ class Ingrediente
 
         return $row;
     }
+    public function findByName(PDO $pdo, string $name): ?array
+    {
+        $stmt = $pdo->prepare("SELECT id_ingrediente,nombre,indicaciones FROM ingredientes WHERE nombre = :name LIMIT 1");
+        $stmt->execute([':name' => $name]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) return null;
+
+        // Adjuntar alérgenos relacionados (id_alergeno, nombre)
+        $stmt = $pdo->prepare("SELECT a.id_alergeno,a.nombre FROM ingredientes_alergenos ia JOIN alergenos a ON a.id_alergeno = ia.id_alergeno WHERE ia.id_ingrediente = :id");
+        $stmt->execute([':id' => $row['id_ingrediente']]);
+        $row['alergenos'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        return $row;
+    }
 
     /**
      * createIngrediente
@@ -260,25 +274,60 @@ class Ingrediente
         // Normalizar: filtrar valores vacíos y convertir a ints
         $ids = array_map('intval', array_filter($alergenosIds, fn($v) => $v !== ''));
 
-        // Uso de transacción para garantizar atomicidad de la operación
-        $pdo->beginTransaction();
-        try {
-            // Borrar relaciones actuales
-            $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id")->execute([':id' => $idIngrediente]);
+        // Nota: la transacción la debe gestionar el controlador que llama; aquí solo se aplican las operaciones.
+        // Borrar relaciones actuales
+        $stmt = $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id");
+        $stmt->execute([':id' => $idIngrediente]);
 
-            // Insertar las nuevas relaciones si las hay
-            if (!empty($ids)) {
-                $ins = $pdo->prepare("INSERT OR IGNORE INTO ingredientes_alergenos (id_ingrediente,id_alergeno) VALUES (:iid,:aid)");
-                foreach ($ids as $aid) {
-                    $ins->execute([':iid' => $idIngrediente, ':aid' => $aid]);
+        // Insertar las nuevas relaciones si las hay
+        if (!empty($ids)) {
+            $ins = $pdo->prepare("INSERT OR IGNORE INTO ingredientes_alergenos (id_ingrediente,id_alergeno) VALUES (:iid,:aid)");
+            foreach ($ids as $aid) {
+                $ins->execute([':iid' => $idIngrediente, ':aid' => $aid]);
+            }
+        }
+    }
+
+    // obtener alegenos unicos de un array de ids de ingredientes
+    /**
+     * getUniqueAlergenosFromIngredientes
+     *
+     * Dado un array de ingredientes (cada uno con clave id_ingrediente) devuelve
+     * un array de ids de alérgenos únicos.
+     *
+     * @param array<int,array<string,mixed>> $ingredientes
+     * @return int[] lista única de ids de alérgenos
+     */
+    public function getUniqueAlergenosFromIngredientes(array $ingredientes): array
+    {
+        $alergenosIds = [];
+        foreach ($ingredientes as $ing){
+            if ($ing <= 0) continue; // ignorar ids inválidos o vacíos
+            $ingData = $this->findById($this->pdo, $ing); // usar el método findById del modelo Ingrediente
+            if ($ingData === null) continue; // ignorar ingredientes no encontrados
+
+            // Obtener los alérgenos del ingrediente
+            $alergenos = $ingData['alergenos'] ?? [];
+            foreach ($alergenos as $a) {
+                if (isset($a['id_alergeno']) && ctype_digit((string)$a['id_alergeno'])) {
+                    $alergenosIds[] = (int)$a['id_alergeno'];
                 }
             }
-
-            $pdo->commit();
-        } catch (\Throwable $e) {
-            // Si hay error, revertir y propagar
-            $pdo->rollBack();
-            throw $e;
         }
+
+        return array_values(array_unique($alergenosIds));
+    }
+
+    // removeAllAlergenosFromIngrediente
+    /**
+     * Elimina todas las relaciones de alérgenos para un ingrediente dado.
+     * @param PDO $pdo
+     * @param int $idIngrediente
+     * @return void
+     */
+    public function removeAllAlergenosFromIngrediente(PDO $pdo, int $idIngrediente): void
+    {
+        $stmt = $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id");
+        $stmt->execute([':id' => $idIngrediente]);
     }
 }
