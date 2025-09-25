@@ -193,3 +193,55 @@
 
   global.AppUIHelpers = AppUIHelpers;
 })(window);
+
+  /**
+   * Attach minimal back-key bindings for a form.
+   * Shift + ArrowUp moves focus to the previous focusable control inside the form.
+   * Shift + ArrowDown moves focus to the next focusable control inside the form.
+   * cfg:
+   *  - formSelector (string) default 'form[action="/elaborados.php"]'
+   *
+   * Returns { destroy(): void } to remove the listener.
+   */
+  AppUIHelpers.attachBackKeyBinding = function (cfg) {
+    cfg = cfg || {};
+    var selector = cfg.formSelector || 'form[action="/elaborados.php"]';
+    var form = document.querySelector(selector);
+    if (!form) return { destroy: function () {} };
+
+    function isFocusable(el) {
+      return el && el.offsetParent !== null && !el.disabled && el.type !== 'hidden';
+    }
+
+    function onKeyDown(e) {
+      if (!e.shiftKey) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'Up' && e.key !== 'ArrowDown' && e.key !== 'Down') return;
+
+      var nodes = Array.from(form.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      var els = nodes.filter(isFocusable);
+      if (!els.length) return;
+
+      var idx = els.indexOf(document.activeElement);
+
+      if (e.key === 'ArrowUp' || e.key === 'Up') {
+        var prev = (idx > 0) ? els[idx - 1] : els[els.length - 1];
+        try { prev.focus(); } catch (err) {}
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'Down') {
+        var next = (idx >= 0 && idx < els.length - 1) ? els[idx + 1] : els[0];
+        try { next.focus(); } catch (err) {}
+        e.preventDefault();
+        return;
+      }
+    }
+
+    form.addEventListener('keydown', onKeyDown, false);
+    return {
+      destroy: function () {
+        form.removeEventListener('keydown', onKeyDown, false);
+      }
+    };
+  };
