@@ -478,4 +478,31 @@ final class Elaborado
         }
         return (int)$row['id'];
     }
+    public function getTipoNameById(int $id): ?string
+    {
+        $sql = 'SELECT nombre FROM tipo_elaboracion WHERE id = :id LIMIT 1';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false || !isset($row['nombre'])) {
+            return null;
+        }
+        return (string)$row['nombre'];
+    }
+    public function getTipos(): array
+    {
+        $sql = 'SELECT id, nombre, descripcion FROM tipo_elaboracion ORDER BY nombre ASC';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $tipos = [];
+        foreach ($rows as $r) {
+            if (isset($r['id']) && isset($r['nombre'])) {
+                $tipos[] = ['id' => (int)$r['id'], 'nombre' => (string)$r['nombre'], 'descripcion' => (string)$r['descripcion']];
+            }
+        }
+
+        return $tipos;
+    }
 }
