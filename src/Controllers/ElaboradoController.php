@@ -69,6 +69,10 @@ final class ElaboradoController
                 $this->saveElaboracion();
                 return;
             }
+            if ($action === 'save_otra_elaboracion') {
+                $this->saveOtraElaboracion();
+                return;
+            }
             if ($action === 'update_escandallo') {
                 $this->updateEscandallo();
                 return;
@@ -130,6 +134,8 @@ final class ElaboradoController
         }
 
         $elaborado = null;
+        $tiposElaboracion = $this->model->getTiposElaboracion();
+        $elaborados = $this->model->getAll();
         $ingredienteElaborado = [];
         $ingredienteOrigen = [];
         if ($id !== null && $id > 0) {
@@ -452,6 +458,99 @@ final class ElaboradoController
             return;
         }
     }
+    /**
+     * saveOtraElaboracion
+     * 
+     * Procesa POST action=save_otra_elaboracion desde elaborado_view.php
+     * - Valida CSRF y permisos.
+     * - Recolecta inputs: id, nombre, peso_total, descripcion, ingredientes[], cantidades[] y unidades[].
+     * - Crea un nuevo elaborado de tipo 1 (otra elaboración) y añade los ingredientes asociados.
+     * 
+     */
+    private function saveOtraElaboracion(): void
+    {
+        // CSRF + permisos
+        if (!Csrf::validateToken($_POST['csrf'] ?? '')) {
+            // invalid token
+            http_response_code(400);
+            echo 'CSRF token inválido';
+            return;
+        }
+        if (!$this->canModify()) {
+            Redirect::to('/elaborados.php');
+            return;
+        }
+        // Recolectar y validar datos: id, selected_entity_type, selected_entity_id, peso_obtenido, dias_viabilidad, descripcion
+        $elaboradoId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $selectedEntityType = trim((string)($_POST['selected_entity_type'] ?? ''));
+        $selectedEntityId = isset($_POST['selected_entity_id']) ? (int)$_POST['selected_entity_id'] : 0;
+        $pesoObtenido = isset($_POST['peso_obtenido']) ? (float)$_POST['peso_obtenido'] : 0.0;
+        $diasViabilidad = isset($_POST['dias_viabilidad']) ? (int)$_POST['dias_viabilidad'] : null;
+        $descripcion = trim((string)($_POST['descripcion'] ?? ''));
+        $tipo = $_POST['tipo'] ?? "";
+        $idTipo =$this->model->getTipoByName($tipo);
+
+        if ($elaboradoId > 0) {
+            $this->renderEditWithError(null, 'Para modificar una elaboración, use el formulario de edición.');
+            return;
+        }
+        if ($selectedEntityType === '' || $selectedEntityId <= 0) {
+            $this->renderEditWithError(null, 'Seleccione una entidad válida para la otra elaboración.');
+            return;
+        }
+        // El peso obtenido puede ser 0 o más (0 significa que no se especifica)
+        if ($pesoObtenido < 0) {
+            $this->renderEditWithError(null, 'Indique el peso obtenido válido (0 o más).');
+            return;
+        }
+
+        // obtener nombre desde el modelo según el tipo seleccionado
+        $nombre = '';
+        if ($selectedEntityType === 'Ingrediente') {
+            $ingrediente = $this->ingredienteModel->findById($this->pdo,$selectedEntityId);
+            $nombre = $ingrediente['nombre'] ?? '';
+        } elseif ($selectedEntityType === 'Elaborado') {
+            $elaborado = $this->model->findById($selectedEntityId);
+            $nombre = $elaborado['nombre'] ?? '';
+        }
+        $nombre = $nombre . ' - ' . ($tipo ?? 'Otra elaboración');
+        if ($nombre === '') {
+            $this->renderEditWithError(null, 'No se pudo obtener el nombre de la entidad seleccionada.');
+            return;
+        }
+        $this->pdo->beginTransaction();
+        try {
+            // crea la elaboración para la tabla elaborados delengadola en el modelo (nombre, descripción, peso_obtenido, dias_viabilidad y tipo)
+            $idElaborado = $this->model->createElaboracion(
+                $nombre,
+                $descripcion,
+                $pesoObtenido,
+                $diasViabilidad,
+                $idTipo, // tipo 1 = otra elaboración
+            );
+            // si el tipo es Ingrediente añadir a elaborados_ingredientes con es_origen=1
+            if ($selectedEntityType === 'Ingrediente') {
+                $this->model->addIngredienteToElaborado(
+                    $idElaborado,
+                    $selectedEntityId,
+                    0.0, // cantidad 0 para el ingrediente asociado
+                    1,   // id_unidad 1 (unidad por defecto)
+                    true // es_origen = 1 para el ingrediente asociado
+                );
+            } 
+        } catch (\Throwable $e) {
+            // Renderizar formulario con error amigable
+            $this->renderEditWithError(null, 'Error guardando otra elaboración: ' . $e->getMessage());
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return;
+        }
+        $this->pdo->commit();
+        // Redirigir al listado
+        Redirect::to('/elaborados.php');
+    }
+
     /**
      * Actualiza un escandallo basándose en la estructura POST descrita.
      * Espera campos:
