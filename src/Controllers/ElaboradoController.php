@@ -112,6 +112,9 @@ final class ElaboradoController
     {
         $elaborados = $this->model->getAll();
         $canModify = $this->canModify();
+
+        $tiposElaboracion = $this->model->getTipos();
+
         $debug = defined('APP_DEBUG') && APP_DEBUG === true;
 
         // Incluir la vista de listado. Ruta relativa desde src/Controllers a public/views.
@@ -153,6 +156,7 @@ final class ElaboradoController
                 Redirect::to('/elaborados.php');
             }
         }
+        $tipo = $this->model->getTipoNameById($elaborado['tipo'] ?? 0);
         // Datos auxiliares para el formulario
         $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
         $unidades = $this->unitModel->getAllUnits();
