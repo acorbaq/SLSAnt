@@ -48,6 +48,7 @@ $tipo = $_GET['tipo'] ?? null;
     <div class="mb-4">
         <a href="?crear&tipo=elaboracion" class="px-3 py-1 border rounded <?php echo $tipo === 'elaboracion' ? 'bg-teal-100' : ''; ?>">Elaboración</a>
         <a href="?crear&tipo=escandallo" class="px-3 py-1 border rounded <?php echo $tipo === 'escandallo' ? 'bg-teal-100' : ''; ?>">Escandallo</a>
+        <a href="?crear&tipo=otros" class="px-3 py-1 border rounded <?php echo $tipo === 'otros' ? 'bg-teal-100' : ''; ?>">Otras elaboraciones</a>
     </div>
     <?php else: ?>
         <div class="mb-4">
@@ -71,6 +72,8 @@ $tipo = $_GET['tipo'] ?? null;
             require __DIR__ . '/partials/elaborado_view.php';
         elseif ($tipo === 'escandallo'):
             require __DIR__ . '/partials/escandallo_view.php';
+        elseif ($tipo === 'otros'):
+            require __DIR__ . '/partials/otrasElaboraciones_view.php';
         else: ?>
             <p class="text-red-600">Tipo de elaborado no válido. Por favor, selecciona "Elaboración" o "Escandallo".</p>
         <?php endif;
