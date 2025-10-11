@@ -954,14 +954,18 @@ final class ElaboradoController
                 Redirect::to('/elaborados.php');
                 return;
             }
-            $isEscandallo = isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 1;
+            $isEscandallo = isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 2;
+            $isElaboracion= isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 1;
 
             if ($isEscandallo) {
                 // deleteEscandallo maneja su propia transacción y validaciones
                 $this->model->deleteEscandallo($elaboradoId);
-            } else {
+            } elseif ($isElaboracion) {
                 // deleteElaboracion también puede delegar transacción si lo deseas
                 $this->model->deleteElaboracion($elaboradoId);
+            } else {
+                // deleteOtraElaboracion
+                $this->model->deleteOtraElaboracion($elaboradoId);
             }
 
             // Auditoría (si el proyecto lo usa)

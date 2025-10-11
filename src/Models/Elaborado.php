@@ -429,6 +429,43 @@ final class Elaborado
         }
     }
 
+    /**
+     * Elimina un elaborado de tipo "otro" (procesos sin ingredientes asociados).
+     *
+     * Comportamiento:
+     * - Estos elaborados representan procesos como envasado/etiquetado/congelado que no crean ni relacionan ingredientes.
+     * - Solo se elimina la fila correspondiente en la tabla `elaborados`; no se tocan ingredientes ni relaciones externas.
+     * - La operación se ejecuta dentro de una transacción para garantizar atomicidad. En caso de error se revierte la transacción
+     *   y se vuelve a lanzar la excepción para que el controlador la gestione.
+     *
+     * Notas:
+     * - Si en el futuro se permitiera asociar ingredientes o generar subproductos a este tipo de elaborados, habrá que adaptar este método para
+     *   borrar o preservar las relaciones y/o ingredientes según la nueva regla de negocio.
+     *
+     * @param int $idElaborado ID del elaborado a eliminar
+     * @throws \Throwable Propaga cualquier excepción lanzada por las operaciones PDO
+     * @return void
+     */
+    public function deleteOtraElaboracion(int $idElaborado)
+    {
+        $this->pdo->beginTransaction();
+        try {
+            // Borrar el elaborado (la función deleteElaborado ejecuta el DELETE correspondiente).
+            $this->deleteElaborado($idElaborado);
+
+            // Confirmar cambios
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            // Si hay error, revertir transacción y registrar el mensaje
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+                error_log($e->getMessage());
+            }
+            // Re-lanzar para que el controlador lo maneje
+            throw $e;
+        }
+    }
+
     public function origenIngredienteID(int $idElaborado): int
     {
         $sql = 'SELECT id_ingrediente FROM elaborados_ingredientes WHERE id_elaborado = :idElaborado AND es_origen = 1 LIMIT 1';
