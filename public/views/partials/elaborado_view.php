@@ -61,6 +61,7 @@ function h($s)
         <?php else: ?>
             <input type="hidden" name="action" value="update_elaboracion">
         <?php endif; ?>
+        <input type="hidden" name="tipo" value="<?php echo (int)($tipoId ?? 0); ?>">
         <input type="hidden" name="id" value="<?php echo (int)($elaborado['id_elaborado'] ?? 0); ?>">
         <!-- Incluye:
             1) Un input para dar nombre a la elaboración.

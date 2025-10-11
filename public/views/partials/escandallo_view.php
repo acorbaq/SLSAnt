@@ -65,6 +65,7 @@ function h($s)
             <input type="hidden" name="action" value="update_escandallo">
         <?php endif; ?>
         <input type="hidden" name="id" value="<?php echo (int)($elaborado['id_elaborado'] ?? 0); ?>">
+        <input type="hidden" name="tipo" value="<?php echo (int)($tipoId ?? 0); ?>">
         <!-- Incluye:
      1) Un select con todos los ingredientes ordenados por nombre.
      2) Un campo de peso_inicial (required, numérico).
@@ -261,6 +262,8 @@ function h($s)
                     <li>ingredientes cargados: <?php echo (int)count($ingredientes); ?></li>
                     <li>origen seleccionado: <?php echo h($elaborado['nombre'] ?? 'ninguno'); ?></li>
                     <li>peso_inicial: <?php echo h($elaborado['peso_obtenido']); ?></li>
+                    <li>id tipo: <?php echo (int)($tipoId ?? 0); ?></li>
+                    <li>tipo nombre: <?php echo h($tipo ?? ''); ?></li>
                     <li>n.º salidas: <?php echo h((int)count($ingredienteElaborado) ?? 0); ?></li>
                 </ul>
             </div>

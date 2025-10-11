@@ -156,6 +156,28 @@ final class ElaboradoController
                 Redirect::to('/elaborados.php');
             }
         }
+        // obtener todos los tipos de elaboración
+        $datosTiposElaboración = $this->model->getTipos();
+        //sanitizar el campo nombre eliminando mayusculas y acentos
+        $normalize = function (string $s): string {
+            $s = mb_strtolower($s, 'UTF-8');
+            $s = preg_replace('/[áàäâ]/u', 'a', $s);
+            $s = preg_replace('/[éèëê]/u', 'e', $s);
+            $s = preg_replace('/[íìïî]/u', 'i', $s);
+            $s = preg_replace('/[óòöô]/u', 'o', $s);
+            $s = preg_replace('/[úùüû]/u', 'u', $s);
+            $s = preg_replace('/[ñ]/u', 'n', $s);
+            $s = preg_replace('/[^a-z0-9]+/u', '_', $s); // reemplazar no alfanum por _
+            $s = trim($s, '_'); // eliminar _ inicial/final
+            return $s;
+        };
+        // Tipo seleccionado (por nombre en ?tipo=); si no existe, usar el del elaborado o 0
+        foreach ($datosTiposElaboración as $t) {
+            $tipoMap[$normalize($t['nombre'])] = (int)$t['id'];
+        }
+        $tipoName = $_GET['tipo'] ?? '';
+        // Obtener el id del tipo a partir del array $tipoMap
+        $tipoId = $tipoMap[$normalize($tipoName)] ?? $elaborado['tipo'] ?? 0;
         $tipo = $this->model->getTipoNameById($elaborado['tipo'] ?? 0);
         // Datos auxiliares para el formulario
         $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
@@ -230,6 +252,7 @@ final class ElaboradoController
         $diasConservacion = isset($_POST['dias_conservacion']) ? (int)$_POST['dias_conservacion'] : null;
         $descripcion = trim((string)($_POST['descripcion'] ?? ''));
         $nombreElaborado = trim((string)($_POST['nombre'] ?? ''));
+        $tipo = isset($_POST['tipo']) ? (int)$_POST['tipo'] : 0;
 
         if ($origenId <= 0) {
             // origin required
@@ -300,6 +323,7 @@ final class ElaboradoController
                 $descripcion,
                 $nombreElaborado,
                 $diasConservacion,
+                $tipo,
                 $this->ingredienteModel
             );
         } catch (\Throwable $e) {
@@ -342,6 +366,7 @@ final class ElaboradoController
         $ingredientes = $_POST['ingredientes'] ?? [];
         $cantidades = $_POST['cantidades'] ?? [];
         $unidades = $_POST['unidades'] ?? [];
+        $tipo = isset($_POST['tipo']) ? (int)$_POST['tipo'] : 0;
         if ($elaboradoId > 0) {
             $this->renderEditWithError(null, 'Para modificar una elaboración, use el formulario de edición.');
             return;
@@ -356,7 +381,7 @@ final class ElaboradoController
         $encode = function ($data) {
             $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
             if ($json === false) {
-            return print_r($data, true);
+                return print_r($data, true);
             }
             return $json;
         };
@@ -428,7 +453,7 @@ final class ElaboradoController
                 $descripcion,
                 $pesoTotal,
                 $diasConservacion,
-                0, // tipo 0 = elaboración normal
+                $tipo, // tipo 1 = elaboración normal
             );
             // ahora actualiza la tabla elaborados_ingredientes con los ingredientes de entrada
             foreach ($ingredientesData as $ing) {
@@ -492,7 +517,7 @@ final class ElaboradoController
         $diasViabilidad = isset($_POST['dias_viabilidad']) ? (int)$_POST['dias_viabilidad'] : null;
         $descripcion = trim((string)($_POST['descripcion'] ?? ''));
         $tipo = $_POST['tipo'] ?? "";
-        $idTipo =$this->model->getTipoByName($tipo);
+        $idTipo = $this->model->getTipoByName($tipo);
 
         if ($elaboradoId > 0) {
             $this->renderEditWithError(null, 'Para modificar una elaboración, use el formulario de edición.');
@@ -511,7 +536,7 @@ final class ElaboradoController
         // obtener nombre desde el modelo según el tipo seleccionado
         $nombre = '';
         if ($selectedEntityType === 'Ingrediente') {
-            $ingrediente = $this->ingredienteModel->findById($this->pdo,$selectedEntityId);
+            $ingrediente = $this->ingredienteModel->findById($this->pdo, $selectedEntityId);
             $nombre = $ingrediente['nombre'] ?? '';
         } elseif ($selectedEntityType === 'Elaborado') {
             $elaborado = $this->model->findById($selectedEntityId);
@@ -541,7 +566,7 @@ final class ElaboradoController
                     1,   // id_unidad 1 (unidad por defecto)
                     true // es_origen = 1 para el ingrediente asociado
                 );
-            } 
+            }
         } catch (\Throwable $e) {
             // Renderizar formulario con error amigable
             $this->renderEditWithError(null, 'Error guardando otra elaboración: ' . $e->getMessage());
@@ -955,7 +980,7 @@ final class ElaboradoController
                 return;
             }
             $isEscandallo = isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 2;
-            $isElaboracion= isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 1;
+            $isElaboracion = isset($elaborado['tipo']) && (int)$elaborado['tipo'] === 1;
 
             if ($isEscandallo) {
                 // deleteEscandallo maneja su propia transacción y validaciones

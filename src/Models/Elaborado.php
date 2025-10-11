@@ -97,7 +97,7 @@ final class Elaborado
      * @return int id del elaborado creado
      * @throws \RuntimeException en caso de error
      */
-    public function createEscandallo(int $origenId, float $pesoInicial, array $salidas, string $descripcion, string $nombre, int $diasViabilidad, Ingrediente $ingredienteModel): int
+    public function createEscandallo(int $origenId, float $pesoInicial, array $salidas, string $descripcion, string $nombre, int $diasViabilidad, int $tipo, Ingrediente $ingredienteModel): int
     {
         // validar origen y leer indicaciones + alérgenos desde el modelo Ingrediente
         $origen = $ingredienteModel->findById($this->pdo, $origenId);
@@ -142,7 +142,7 @@ final class Elaborado
                 ':d' => $descripcion,
                 ':p' => $pesoInicial,
                 ':f' => $diasViabilidad,
-                ':t' => 1
+                ':t' => $tipo
             ]);
             $idElaborado = (int)$this->pdo->lastInsertId();
 
