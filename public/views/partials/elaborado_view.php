@@ -29,7 +29,9 @@ if ($elaborado !== null) {
 
 $pesoTotal = $elaborado['peso_total'] ?? 0.0;
 $elaboracion = $elaborado['nombre'] ?? '';
+
 $entradas = $ingredienteElaborado ?? [];
+
 $unidades = $unidades ?? [];
 // localizar  el id de n.c con array filter
 $unidadNCId = null;
@@ -115,7 +117,7 @@ function h($s)
             <!-- Boton tipo tip para escoger si se quiere guardar el elaborado como un ingrediente -->
             <div class="mt-2 ml-auto self-start md:self-center text-right">
                 <label class="inline-flex items-center">
-                    <input type="checkbox" name="save_as_ingredient" value="1" class="form-checkbox">
+                    <input type="checkbox" name="save_as_ingredient" value="1" class="form-checkbox" <?php echo !empty($ingredienteOrigen) ? 'checked' : ''; ?>>
                     <span class="ml-2 text-sm">Guardar elaborado como ingrediente</span>
                 </label>
             </div>
@@ -249,7 +251,7 @@ function h($s)
                                         <?php
                                         // determinar id de unidad actual (buscar por id o por abreviatura para compatibilidad)
                                         $curUnitId = null;
-                                        $curRaw = (string)($entry['unidad'] ?? '');
+                                        $curRaw = (string)($entry['id_unidad'] ?? '');
                                         // si el valor ya es numérico, usarlo directamente
                                         if (is_numeric($curRaw) && (int)$curRaw > 0) {
                                             $curUnitId = (int)$curRaw;
@@ -343,7 +345,7 @@ function h($s)
 
 <script src="/js/ui-helper.js"></script>
 <script>
-    (function () {
+    (function() {
         if (window.AppUIHelpers && typeof window.AppUIHelpers.attachBackKeyBinding === 'function') {
             // Guarda la instancia para poder destruir el listener más tarde si se necesita
             window._backKeyBinding = AppUIHelpers.attachBackKeyBinding({
@@ -356,7 +358,7 @@ function h($s)
     // exponer id de kg y nc como globals para que el submit-guard mínimo fuera del IIFE pueda usarlos
     window.DEFAULT_UNIDAD_NC = <?php echo (int)($unidadNCId ?? 0); ?>;
     window.DEFAULT_UNIDAD_KG = <?php echo (int)($unidadKgId ?? 0); ?>;
-    
+
     (function() {
         // valor por defecto para unidad "n.c." (id) disponible en JS
         var DEFAULT_UNIDAD_NC = <?php echo (int)($unidadNCId ?? 0); ?>;
@@ -402,7 +404,7 @@ function h($s)
             if (pesoField) pesoField.value = total.toFixed(2);
         }
 
- // Añadir ingrediente desde input + datalist/select oculto
+        // Añadir ingrediente desde input + datalist/select oculto
         addBtn && addBtn.addEventListener('click', function() {
             var nameVal = (searchInput && searchInput.value || '').trim();
             if (!nameVal) {
@@ -429,7 +431,9 @@ function h($s)
 
             // --- NUEVO: evitar duplicados --- //
             var existingIds = Array.from(listBody.querySelectorAll('input[name="ingredientes[]"]'))
-                .map(function(i){ return (i.value || '').toString().trim(); });
+                .map(function(i) {
+                    return (i.value || '').toString().trim();
+                });
             if (existingIds.indexOf(ingId) !== -1) {
                 alert('El ingrediente ya está añadido.');
                 // opcional: poner foco en el ingrediente ya añadido
@@ -467,10 +471,13 @@ function h($s)
             if (searchInput) searchInput.value = '';
             if (cantidadInput) cantidadInput.value = '';
 
-           // poner el foco en el buscador para agilizar la entrada de siguientes ingredientes
-           if (searchInput) {
-               try { searchInput.focus(); if (typeof searchInput.select === 'function') searchInput.select(); } catch (e) {}
-           }
+            // poner el foco en el buscador para agilizar la entrada de siguientes ingredientes
+            if (searchInput) {
+                try {
+                    searchInput.focus();
+                    if (typeof searchInput.select === 'function') searchInput.select();
+                } catch (e) {}
+            }
 
             updatePesoTotal();
 
@@ -527,7 +534,9 @@ function h($s)
             if (!kgId || kgId === '0') return; // sin kg definido no validamos cliente
             var selects = Array.from(form.querySelectorAll('select[name="unidades[]"]'));
             if (selects.length === 0) return;
-            var hasNonKg = selects.some(function(s) { return String(s.value) !== kgId; });
+            var hasNonKg = selects.some(function(s) {
+                return String(s.value) !== kgId;
+            });
             if (hasNonKg) {
                 if (!confirm('Se han detectado unidades distintas de kg en los ingredientes. Esto puede producir inconsistencias en el cálculo del peso final. ¿Desea continuar y guardar de todos modos?')) {
                     ev.preventDefault();
