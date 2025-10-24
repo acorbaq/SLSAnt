@@ -212,10 +212,38 @@ final class Elaborado
         ]);
         return (int)$this->pdo->lastInsertId();
     }
+    public function updateElaboracion($id, $nombre, $descripcion, $pesoTotal, $diasViabilidad, $tipo)
+    {
+        // Implementar la lógica para actualizar una elaboración en la base de datos.
+        $sql = 'UPDATE elaborados SET nombre = :nombre, peso_obtenido = :peso_obtenido, descripcion = :descripcion, dias_viabilidad = :dias_viabilidad, tipo = :tipo
+                WHERE id_elaborado = :id';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':nombre' => $nombre,
+            ':peso_obtenido' => $pesoTotal,
+            ':descripcion' => $descripcion,
+            ':dias_viabilidad' => $diasViabilidad,
+            ':tipo' => $tipo
+        ]);        
+    }
+
     public function addIngredienteToElaborado(int $idElaborado, int $idIngrediente, float $cantidad, int $idUnidad, bool $esOrigen = false): void
     {
         $sql = 'INSERT INTO elaborados_ingredientes (id_elaborado, id_ingrediente, cantidad, id_unidad, es_origen) 
                 VALUES (:id_elaborado, :id_ingrediente, :cantidad, :id_unidad, :es_origen)';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':id_elaborado' => $idElaborado,
+            ':id_ingrediente' => $idIngrediente,
+            ':cantidad' => $cantidad,
+            ':id_unidad' => $idUnidad,
+            ':es_origen' => $esOrigen ? 1 : 0
+        ]);
+    }
+    public function updateIngredienteToElaborado(int $idElaborado, int $idIngrediente, float $cantidad, int $idUnidad, bool $esOrigen = false): void
+    {
+        $sql = 'UPDATE elaborados_ingredientes SET cantidad = :cantidad, id_unidad = :id_unidad, es_origen = :es_origen 
+                WHERE id_elaborado = :id_elaborado AND id_ingrediente = :id_ingrediente';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             ':id_elaborado' => $idElaborado,

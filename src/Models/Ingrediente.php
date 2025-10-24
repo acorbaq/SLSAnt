@@ -317,7 +317,8 @@ class Ingrediente
 
         return array_values(array_unique($alergenosIds));
     }
-
+    // getLastIngredient
+    
     // removeAllAlergenosFromIngrediente
     /**
      * Elimina todas las relaciones de alérgenos para un ingrediente dado.
