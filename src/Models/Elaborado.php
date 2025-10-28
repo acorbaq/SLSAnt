@@ -203,28 +203,37 @@ final class Elaborado
         $sql = 'INSERT INTO elaborados (nombre, peso_obtenido, descripcion, dias_viabilidad, tipo) 
                 VALUES (:nombre, :peso_obtenido, :descripcion, :dias_viabilidad, :tipo)';
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
+        $params = [
             ':nombre' => $nombre,
-            ':peso_obtenido' => $pesoTotal,
+            ':peso_obtenido' => $pesoTotal === null ? null : (float)$pesoTotal,
             ':descripcion' => $descripcion,
-            ':dias_viabilidad' => $diasViabilidad,
-            ':tipo' => $tipo
-        ]);
+            ':dias_viabilidad' => $diasViabilidad === null ? null : (int)$diasViabilidad,
+            ':tipo' => $tipo === null ? 0 : (int)$tipo,
+        ];
+        $stmt->execute($params);
         return (int)$this->pdo->lastInsertId();
     }
-    public function updateElaboracion($id, $nombre, $descripcion, $pesoTotal, $diasViabilidad, $tipo)
+
+    public function updateElaboracion($id, $nombre, $descripcion, $pesoTotal, $diasViabilidad, $tipo): void
     {
-        // Implementar la lógica para actualizar una elaboración en la base de datos.
-        $sql = 'UPDATE elaborados SET nombre = :nombre, peso_obtenido = :peso_obtenido, descripcion = :descripcion, dias_viabilidad = :dias_viabilidad, tipo = :tipo
+        // Actualizar todos los campos esperados (se puede refactorizar para updates parciales si se desea)
+        $sql = 'UPDATE elaborados
+                SET nombre = :nombre,
+                    peso_obtenido = :peso_obtenido,
+                    descripcion = :descripcion,
+                    dias_viabilidad = :dias_viabilidad,
+                    tipo = :tipo
                 WHERE id_elaborado = :id';
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
+        $params = [
+            ':id' => (int)$id,
             ':nombre' => $nombre,
-            ':peso_obtenido' => $pesoTotal,
+            ':peso_obtenido' => $pesoTotal === null ? null : (float)$pesoTotal,
             ':descripcion' => $descripcion,
-            ':dias_viabilidad' => $diasViabilidad,
-            ':tipo' => $tipo
-        ]);        
+            ':dias_viabilidad' => $diasViabilidad === null ? null : (int)$diasViabilidad,
+            ':tipo' => $tipo === null ? 0 : (int)$tipo,
+        ];
+        $stmt->execute($params);
     }
 
     public function addIngredienteToElaborado(int $idElaborado, int $idIngrediente, float $cantidad, int $idUnidad, bool $esOrigen = false): void
@@ -345,6 +354,17 @@ final class Elaborado
         $sql = 'DELETE FROM elaborados_ingredientes WHERE id_elaborado = :idElaborado';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':idElaborado' => $idElaborado]);
+    }
+    /**
+     * Eliminar los ingredientes asociado a un elaborado.
+     * 
+     * @param int $idElaborado
+     */
+    public function deleteIngredientesAsociados(int $idIngrediente, int $idElaborado): void
+    {
+        $sql = 'DELETE FROM elaborados_ingredientes WHERE id_ingrediente = :idIngrediente AND id_elaborado = :idElaborado';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idIngrediente' => $idIngrediente, ':idElaborado' => $idElaborado]);
     }
 
     /**
