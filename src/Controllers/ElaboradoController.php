@@ -961,7 +961,7 @@ final class ElaboradoController
         $nombre = trim((string)($_POST['nombre'] ?? ''));
         $descripcion = trim((string)($_POST['descripcion'] ?? ''));
         $pesoTotalRaw = $_POST['peso_total'] ?? null;
-        $diasConservacionRaw = $_POST['dias_conservacion'] ?? null;
+        $diasConservacionRaw = $_POST['dias_viabilidad'] ?? null;
         $saveAsIngredient = isset($_POST['save_as_ingredient']) && $_POST['save_as_ingredient'] === '1';
         $tipo = $_POST['tipo'] ?? "";
         $idTipo = $this->model->getTipoByName($tipo);
@@ -1016,7 +1016,7 @@ final class ElaboradoController
             $this->renderEditWithError(null, 'Elaboración no encontrada.');
             return;
         }
-        $ingredientesActuales = $this->model->getIngredientesByElaboradoId($elaboradoId);
+        $ingredientesActuales = $this->model->getIngredienteElaborado($elaboradoId);
         // comparar datos del elaborado
         $datosCambiados = false;
         $cambioSAI = false;
@@ -1049,6 +1049,7 @@ final class ElaboradoController
                 }
             }
         }
+
         // verificar si hay ingredientes eliminados
         foreach ($ingredientesActuales as $ia) {
             if (!in_array($ia['id_ingrediente'], $ingredientesInputIds, true)) {
@@ -1057,12 +1058,9 @@ final class ElaboradoController
         }
         // verificar si ha cambiado save_as_ingredient
         if ($saveAsIngredient !== $saveAsIngredientActual) {
-            echo '<pre>';
-            print_r($saveAsIngredient);
-            print_r($saveAsIngredientActual);
-            echo '</pre>';
             $cambioSAI = true;
         }
+
         if (!$datosCambiados && !$ingredientesCambiados && !$cambioSAI) {
             // no hay cambios, redirigir al listado
             Redirect::to('/elaborados.php'); 
@@ -1071,71 +1069,97 @@ final class ElaboradoController
         try {
             // Inicio transacción
             $this->pdo->beginTransaction();
+            $ingredienteAsociado = $this->model->origenIngredienteID($elaboradoId);
             // actualizar datos del elaborado si han cambiado comprobar antes si save_as_ingredient es true y no existe el ingrediente asociado, en ese caso crear el ingrediente asociado
             if ($cambioSAI) {
-                // si save_as_ingredient es true y no existe el ingrediente asociado, crear el ingrediente asociado
-                if ($saveAsIngredient !== $saveAsIngredientActual) {
-                    // si save as ingredient es true antes era false, crear ingrediente asociado empleando el modelo ingredienteModel
-                    if ($saveAsIngredient) {
-                        // crear ingrediente asociado o actualizar si ya existe
-                        $existing = $this->ingredienteModel->findByName($this->pdo, $nombre);
-                        if ($existing !== null) {
-                            // actualizar
-                            $ingredienteModel->updateIngrediente($this->pdo, $existing['id_ingrediente'], $nombre, '', []);
-                            $idIngredienteAsociado = (int)$existing['id_ingrediente'];
-                        } else {
-                            // crear nuevo
-                            $idIngredienteAsociado = $this->ingredienteModel->createIngrediente($this->pdo, $nombre, '');
-                        }
-                        // Creamos una lista de los alergenos asociados a los ingredientes de entrada
-                        // para asignarlos al ingrediente empleando el metodo getUniqueAlergenosFromIngredientes del modelo ingrediente solo adminte un array de ids
-                        // nuestos ingredientes es un array con arrays asociativos que contienen id_ingrediente, cantidad, id_unidad
-                        // extraer ids de los ingredientes de entrada (pueden venir como id_ingrediente o id)
-                        $ingIds = [];
-                        foreach ($ingredientesData as $it) {
-                            if (isset($it['id_ingrediente'])) {
-                                $ingIds[] = (int)$it['id_ingrediente'];
-                            } elseif (isset($it['id'])) {
-                                $ingIds[] = (int)$it['id'];
-                            }
-                        }
-                        $ingIds = array_values(array_unique(array_filter($ingIds, function ($v) {
-                            return $v > 0;
-                        })));
-
-                        // obtener alérgenos únicos de esos ingredientes empleando el método del modelo Ingrediente
-                        // Este metodo solicita un array de ids de ingredientes y devuelve un array de ids de alergenos únicos
-                        error_log('Ids de ingredientes para alérgenos: ' . $encode($ingIds));
-                        $alergenosIds = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($ingIds);
-                        error_log('Ids de alérgenos obtenidos: ' . $encode($alergenosIds));
-                        if (!empty($alergenosIds)) {
-                            $this->ingredienteModel->assignAlergenosByIds($this->pdo, $idIngredienteAsociado, $alergenosIds);
-                        }
-                        // creamos la relación en la tablas ingredientes elaborados definiendo el ingrediente como el ingrediente origen
-                        $this->model->addIngredienteToElaborado(
-                            $idElaborado,
-                            $idIngredienteAsociado,
-                            0.0, // cantidad 0 para el ingrediente asociado
-                            1,   // id_unidad 1 (unidad por defecto)
-                            true // es_origen = 1 para el ingrediente asociado
-                        );
+                // si save as ingredient es true antes era false, crear ingrediente asociado empleando el modelo ingredienteModel
+                if ($saveAsIngredient) {
+                    // crear ingrediente asociado o actualizar si ya existe
+                    $existing = $this->ingredienteModel->findByName($this->pdo, $nombre);
+                    if ($existing !== null) {
+                        // updateIngrediente espera: (PDO $pdo, int $id, array $data)
+                        $this->ingredienteModel->updateIngrediente($this->pdo, (int)$existing['id_ingrediente'], ['nombre' => $nombre]);
+                        $idIngredienteAsociado = (int)$existing['id_ingrediente'];
                     } else {
-                        // si save as ingredient es false antes era true, comprobar si el ingrediente asociado esta en uso por otros elaborados, si no esta en uso eliminarlo
-                        // para ello user el metodo isIngredienteUsedInOtherElaborados
-                        $ingredienteAsociado = $this->model->getIngredienteOrigenByElaboradoId($elaboradoId);
-                        if ($ingredienteAsociado) {
-                            // eliminar el ingrediente asociado con deleteIngrediente
-                            $this->ingredienteModel->deleteIngrediente($this->pdo, $ingredienteAsociado['id']);
+                        // crear nuevo
+                        $idIngredienteAsociado = $this->ingredienteModel->createIngrediente($this->pdo, $nombre, '');
+                    }
+                    // Creamos una lista de los alergenos asociados a los ingredientes de entrada
+                    // para asignarlos al ingrediente empleando el metodo getUniqueAlergenosFromIngredientes del modelo ingrediente solo admite un array de ids
+                    // nuestos ingredientes es un array con arrays asociativos que contienen id_ingrediente, cantidad, id_unidad
+                    // extraer ids de los ingredientes de entrada (pueden venir como id_ingrediente o id)
+                    $ingIds = [];
+                    foreach ($ingredientesData as $it) {
+                        if (isset($it['id_ingrediente'])) {
+                            $ingIds[] = (int)$it['id_ingrediente'];
+                        } elseif (isset($it['id'])) {
+                            $ingIds[] = (int)$it['id'];
                         }
+                    }
+                    $ingIds = array_values(array_unique(array_filter($ingIds, function ($v) {
+                        return $v > 0;
+                    })));
+
+                    // obtener alérgenos únicos de esos ingredientes empleando el método del modelo Ingrediente
+                    // Este metodo solicita un array de ids de ingredientes y devuelve un array de ids de alergenos únicos
+                    $alergenosIds = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($ingIds);
+                    if (!empty($alergenosIds)) {
+                        $this->ingredienteModel->assignAlergenosByIds($this->pdo, $idIngredienteAsociado, $alergenosIds);
+                    }
+                    // creamos la relación en la tablas ingredientes elaborados definiendo el ingrediente como el ingrediente origen
+                    $this->model->addIngredienteToElaborado(
+                        $elaboradoId,
+                        $idIngredienteAsociado,
+                        0.0, // cantidad 0 para el ingrediente asociado
+                        1,   // id_unidad 1 (unidad por defecto)
+                        true // es_origen = 1 para el ingrediente asociado
+                    );
+                } else {
+                    // si save as ingredient es false antes era true, comprobar si el ingrediente asociado esta en uso por otros elaborados, si no esta en uso eliminarlo
+                    // para ello user el metodo isIngredienteUsedInOtherElaborados
+                    if ($ingredienteAsociado) {
+                        // eliminar la relación en elaborados_ingredientes: deleteIngredientesAsociados espera (idIngrediente, idElaborado)
+                        $this->model->deleteIngredientesAsociados((int)$ingredienteAsociado, $elaboradoId);
+                        // ahora borrar el ingrediente (si no queda ninguna otra referencia)
+                        $this->ingredienteModel->deleteIngrediente($this->pdo, (int)$ingredienteAsociado);
+                    }
+                }
+            }
+
+            if($ingredientesCambiados){
+                // Al editar se puede eliminar o editar los ingredientes
+                foreach ($ingredientesData as $idata) {
+                    if($idata['id'] == $ingredienteAsociado){
+                        // saltar el ingrediente de origen
+                        continue;
                     }
                 }
             }
 
             if ($datosCambiados){
-                // actualizar los datos del elaborado
-
+                if ($saveAsIngredient && $ingredienteAsociado) {
+                    // actualizar el nombre del ingrediente asociado si existe
+                    $this->model->updateIngredienteToElaborado(
+                        (int)$elaboradoId,
+                        (int)$ingredienteAsociado,
+                        (float)$pesoTotal,
+                        1, // id_unidad 1 (unidad por defecto)
+                        true // es_origen = 1 para el ingrediente asociado
+                    );
+                }
+                // actualizar los datos del elaborado 
+                $this->model->updateElaboracion(
+                    $elaboradoId,
+                    $nombre,
+                    $descripcion,
+                    $pesoTotal,
+                    $diasConservacion,
+                    $tipo
+                );
 
             }
+
+            $this->pdo->commit();
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -1149,11 +1173,6 @@ final class ElaboradoController
                     'elaborado' => $elaboradoId,
                     'user' => $viewerId ?? null
                 ]);
-            }
-            if ($debug) {
-                $this->renderEditWithError($elaboradoId, $errMsg);
-            } else {
-                $this->renderEditWithError($elaboradoId, 'Error actualizando elaboración. Contacte con el administrador.');
             }
             return;
         }
