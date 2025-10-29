@@ -153,7 +153,12 @@ $fmtTipo = function ($tipo) use ($tiposElaboracion) {
                     'id'   => (int) ($row['id_elaborado'] ?? 0),
                   ]);
                 ?>
+                <?php
+                if (!($tipoParam ===  'otros')) {?>
                   <a href="/elaborados.php?<?php echo $qs; ?>" class="text-blue-600 mr-3">Editar</a>
+                <?php } else {?>
+                  <span class="text-sm text-gray-600 mr-3">N/edit</span>
+                <?php } ?>
                   <form method="post" action="/elaborados.php" style="display:inline" onsubmit="return confirm('¿Eliminar este elaborado?');">
                     <input type="hidden" name="csrf" value="<?php echo htmlentities($csrf, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
                     <input type="hidden" name="action" value="delete">
