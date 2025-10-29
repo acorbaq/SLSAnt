@@ -51,7 +51,7 @@ require_once __DIR__ . '/../src/bootstrap.php'; // carga autoload, .env, define 
 
 use App\Utils\Auth;
 use App\Utils\Redirect;
-use App\Controllers\ElaboradoController; 
+use App\Controllers\LotesController; 
 
 // Iniciar/asegurar la sesión PHP y mecanismos de auth (cookies, token, etc.)
 Auth::initSession();
@@ -91,4 +91,4 @@ require_once __DIR__ . '/views/layouts/nav.php';
  */
 
 $controller = new LotesController($pdo);
-$controller->handleRequest(); // GET/POST - delegar comportamiento aquí
+//$controller->handleRequest(); // GET/POST - delegar comportamiento aquí
