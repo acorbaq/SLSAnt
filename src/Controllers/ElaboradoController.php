@@ -93,6 +93,12 @@ final class ElaboradoController
                 return;
             } elseif (isset($_GET['modificar'], $_GET['id']) && ctype_digit((string)$_GET['id'])) {
                 $id = (int)$_GET['id'];
+                $tipo = $_GET['tipo'] ?? '';
+                // Si el tipo es 'otros', no permitir editar (sólo ver listado)
+                if ($tipo === 'otros') {
+                    $this->renderList();
+                    return;
+                }
                 $this->renderEdit($id); // formulario para modificar existente
                 return;
             }
@@ -1160,6 +1166,10 @@ final class ElaboradoController
             }
 
             $this->pdo->commit();
+
+
+            Redirect::to('/elaborados.php');
+            return;
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
