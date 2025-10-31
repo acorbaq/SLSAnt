@@ -33,16 +33,17 @@ final class LotesController
     public function handleRequest(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        
+
         $this->renderList();
     }
 
     private function renderList(): void
     {
-        //$elaborados = $this->lotesModel->getAll();
+        // Obtenemos toda la información de los elaborados para poder mostrarlos en la vista
+        $elaborados = $this->elaboradoModel->getAll();
         $canModify = $this->canModify();
 
-        //$tiposElaboracion = $this->lotesModel->getTipos();
+        $tiposElaboracion = $this->elaboradoModel->getTipos();
 
         $debug = defined('APP_DEBUG') && APP_DEBUG === true;
 
