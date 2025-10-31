@@ -91,4 +91,4 @@ require_once __DIR__ . '/views/layouts/nav.php';
  */
 
 $controller = new LotesController($pdo);
-//$controller->handleRequest(); // GET/POST - delegar comportamiento aquí
+$controller->handleRequest(); // GET/POST - delegar comportamiento aquí
