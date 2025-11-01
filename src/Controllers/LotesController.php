@@ -45,6 +45,9 @@ final class LotesController
             }
         } else {
             // Otros métodos HTTP no soportados por ahora
+            echo '<pre>';
+            print_r($_POST);
+            echo '</pre>';
             http_response_code(405); // Method Not Allowed
             echo "Método no permitido.";
             exit;
