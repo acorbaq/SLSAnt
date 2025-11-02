@@ -446,8 +446,57 @@ $fechaCadDefault = $diasViabilidad > 0
                 return;
             }
 
+            // En todos lo cosas hay que comprobar peso total, temperaturas de inicio y final
+            const pesoTotalEl = formEl.querySelector('input[name="peso_total"]');
+            const pesoTotalRaw = String(pesoTotalEl.value || '').trim().replace(',', '.');
+            const pesoTotalVal = pesoTotalRaw === '' ? 0 : parseFloat(pesoTotalRaw);
+            if (isNaN(pesoTotalVal) || pesoTotalVal <= 0) {
+                alert('El peso total del lote debe ser un número válido mayor que 0.');
+                try { pesoTotalEl.focus(); } catch(_) {}
+                e.preventDefault();
+                return;
+            }
+            // Validación de temperaturas: exigir ambos valores, numéricos y coherentes
+            const tempInicioEl = formEl.querySelector('input[name="temp_inicio"]');
+            const tempFinalEl = formEl.querySelector('input[name="temp_final"]');
+            const tempInicioRaw = String(tempInicioEl?.value || '').trim().replace(',', '.');
+            const tempFinalRaw = String(tempFinalEl?.value || '').trim().replace(',', '.');
+
+            // exigir ambas temperaturas (no permitir envío si faltan)
+            if (tempInicioRaw === '' || tempFinalRaw === '') {
+                alert('Debes indicar las temperaturas de inicio y final del proceso.');
+                try { (tempInicioRaw === '' ? tempInicioEl : tempFinalEl).focus(); } catch(_) {}
+                e.preventDefault();
+                return;
+            }
+
+            const tempInicioVal = parseFloat(tempInicioRaw);
+            const tempFinalVal = parseFloat(tempFinalRaw);
+
+            if (isNaN(tempInicioVal) || isNaN(tempFinalVal)) {
+                alert('Las temperaturas deben ser números válidos.');
+                try { (isNaN(tempInicioVal) ? tempInicioEl : tempFinalEl).focus(); } catch(_) {}
+                e.preventDefault();
+                return;
+            }
+
+            if (tempFinalVal < tempInicioVal) {
+                alert('La temperatura final no puede ser menor que la temperatura de inicio.');
+                try { tempFinalEl.focus(); } catch(_) {}
+                e.preventDefault();
+                return;
+            }
+
             if (!isElaboracion) {
-                // No aplican comprobaciones individuales de lote/fecha
+                // comprobar el lote origen se ha definido correctamente
+                const parentLoteEl = formEl.querySelector('input[name="parent_lote_id"]');
+                const parentLoteVal = String(parentLoteEl.value || '').trim();
+                if (!parentLoteVal) {
+                    alert('Debes definir un Lote origen para este lote (no es una Elaboración).');
+                    try { parentLoteEl.focus(); } catch(_) {}
+                    e.preventDefault();
+                    return;
+                }
                 return;
             }
 
