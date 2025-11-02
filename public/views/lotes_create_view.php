@@ -23,7 +23,7 @@ $unidades = $unidades ?? [];
 $elaborado = $elaborado ?? ['id_elaborado' => null, 'nombre' => '', 'dias_viabilidad' => 0];
 $ingredientesElaborado = $ingredientesElaborado ?? [];
 $productosComerciales = $productosComerciales ?? [];
-$csrf = $csrf ?? '';
+$csrf = $csrfToken ?? '';
 $canModify = isset($canModify) ? (bool)$canModify : true;
 $tiposElaboracion = $tiposElaboracion ?? [];
 
