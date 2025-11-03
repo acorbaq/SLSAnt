@@ -133,16 +133,22 @@ final class LotesController
         // 0) Crear un array $data con los datos necesarios para crear el lote.
         // Información del lote principal desde $postData [elaboracion_id] => 1006 [parent_lote_id] =>  [fecha_produccion] => 2025-11-01 [fecha_caducidad] => 2025-11-08 [peso_total] => 15 [unidad_peso] => kg [temp_inicio] =>  [temp_final] => 
         // Adaptar los datos a la tabla lotes elaboracion_id, parent_lote_id, fecha_produccion, fecha_caducidad, peso_total, unidad_peso, temp_inicio, temp_final
-        $lote = [
+        // 1) obtenemos el ultimo lote creado para ese elaborado
+        $ultimoLote = $this->lotesModel->obtenerLotePorIdElaboracion((int)$postData['elaboracion_id']);
+        $numeroUltimoLote = $ultimoLote ? (int)$ultimoLote['numero_lote'] : 0;
+        // 2) generamos el nuevo número de lote
+        $nuevoNumeroLote = $this->lotesModel->generarNumeroLote($numeroUltimoLote, (int)$postData['elaboracion_id']);
+        $loteData = [
             'elaboracion_id' => (int)$postData['elaboracion_id'],
             'parent_lote_id' => $postData['parent_lote_id'] !== '' ? (string)$postData['parent_lote_id'] : null,
+            'numero_lote' => $nuevoNumeroLote,
             'fecha_produccion' => $postData['fecha_produccion'] ?? null,
             'fecha_caducidad' => $postData['fecha_caducidad'] ?? null,
             'peso_total' => isset($postData['peso_total']) ? (float)$postData['peso_total'] : null,
             'unidad_peso' => $postData['unidad_peso'] ?? null,
             'temp_inicio' => isset($postData['temp_inicio']) && $postData['temp_inicio'] !== '' ? (float)$postData['temp_inicio'] : null,
             'temp_final' => isset($postData['temp_final']) && $postData['temp_final'] !== '' ? (float)$postData['temp_final'] : null,
-        ];
+        ];  
         // Informa de los ingredientes desde $postData['ingredientes'] que puede venir con distintos nombres de campo
         $ingredientes = $postData['ingredientes'] ?? [];
         // Construir el array de ingredientes adaptado a la tabla lote_ingredientes: ingrediente_id, peso, lote, fecha_caducidad, unidad_cantidad, producto_comercial_id.
@@ -158,23 +164,32 @@ final class LotesController
             $ingredientesData[] = [
                 'ingrediente_id' => $id !== null && $id !== '' ? (int)$id : null,
                 'peso' => isset($ingrediente['peso']) && $ingrediente['peso'] !== '' ? (float)$ingrediente['peso'] : null,
-                'lote' => $lote !== '' ? $lote : null,
+                'porcentaje_origen' => isset($ingrediente['peso']) && isset($postData['peso_total']) ? (float)$ingrediente['peso']/(float)$postData['peso_total'] : null,
+                'lote' => $lote !== '' ? $lote : $nuevoNumeroLote,
                 'fecha_caducidad' => $fechaCad !== '' ? $fechaCad : null,
                 'unidad_cantidad' => $unidad ?? null,
                 'producto_comercial_id' => $pcId !== null && $pcId !== '' ? (int)$pcId : null,
             ];
         }
         $data = [
-            'lote' => $lote,
+            'lote' => $loteData,
             'ingredientes' => $ingredientesData,
         ];
         // 1) Añadir datos del lote a la tabla lotes
         // 2) Añadir datos de los ingredientes del lote a la tabla lote_ingredientes
         // 3) Obtener el ID del lote creado para redirigir a la impresión
-        $createdLoteId = $this->lotesModel->crearLote($data);
-
-        // Tabla lotes: id, elaboracion_id, numero_lote, fecha_producción, fecha_caducidad, peso_total, unidad_peso, temp_inicio, temp_fin, parent_lote_id, is_derivado, created_at
-        Redirect::to("/lotes/print?id={$createdLoteId}");
+        //try {
+            $this->pdo->beginTransaction();
+            $createdLoteId = $this->lotesModel->crearLote($data);
+            $this->pdo->commit();
+            // Tabla lotes: id, elaboracion_id, numero_lote, fecha_producción, fecha_caducidad, peso_total, unidad_peso, temp_inicio, temp_fin, parent_lote_id, is_derivado, created_at
+            Redirect::to("/lotes/print?id={$createdLoteId}");
+        /*} catch (\Exception $e) {
+            $this->pdo->rollBack();
+            http_response_code(500); // Internal Server Error
+            echo "Error al crear el lote: " . $e->getMessage();
+            exit;
+        }*/
     }
 
 
