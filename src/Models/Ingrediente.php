@@ -165,7 +165,14 @@ class Ingrediente
 
         return $row;
     }
-
+    // obtenerNombrePorId
+    public function obtenerNombrePorId(int $id): ?string
+    {
+        $stmt = $this->pdo->prepare("SELECT nombre FROM ingredientes WHERE id_ingrediente = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row === false ? null : $row['nombre'];
+    }
     /**
      * createIngrediente
      *
