@@ -40,7 +40,7 @@ final class ImprimirController
             if (isset($_GET['view'])) {
                 // tomar el id del get y enviarlo al render create
                 $loteId = $_GET['id'] ?? null;
-                $this->renderCreate($loteId);
+                $this->renderView($loteId);
             } else {
                 // Si get es otro tipo cargar render list
                 $this->renderList();
@@ -81,6 +81,36 @@ final class ImprimirController
 
         // incluimos la vista y le pasamos los datos
         require_once __DIR__ . '/../../public/views/imprimir_view.php';
+    }
+
+    private function renderView($loteId): void
+    {
+        $lote = null;
+        if ($loteId !== null) {
+            $lote = $this->lotesModel->getLoteById((int)$loteId);
+        }
+        if (!$lote) {
+            http_response_code(404);
+            echo "Lote no encontrado.";
+            exit;
+        }
+        // obtener los ingredientes del lote
+        $loteIngredientes = $this->lotesModel->getIngredientesByLoteId((int)$lote['id']);
+        // obtener información del elaborado
+        $elaborado = $this->elaboradoModel->findById((int)$lote['elaboracion_id']);
+        // obtener información relevante de ingredientes y alergenos para $loteIngredientes
+        foreach ($loteIngredientes as &$li) {
+            $ingrediente = $this->ingredienteModel->findById($this->pdo,(int)$li['ingrediente_id']);
+            if ($ingrediente) {
+                $li['ingrediente'] = $ingrediente;
+                // obtener alergenos
+                $alergenos = $this->ingredienteModel->obtenerAlergenosPorIngredienteId($this->pdo,(int)$ingrediente['id_ingrediente']);
+                // si el array de alergenos está vacío, asignar un array vacío
+                $li['alergenos'] = $alergenos ?: [];
+            }
+        }
+        // incluimos la vista de detalle del lote
+        require_once __DIR__ . '/../../public/views/imprimir_edit_view.php';
     }
 
     // Permisos (mismo criterio que en LotesController)
