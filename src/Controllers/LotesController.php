@@ -92,6 +92,15 @@ final class LotesController
             exit;
         }
         $ingredientesElaborado = $this->elaboradoModel->getIngredienteElaborado((int)$elaboradoId);
+        // comprobar si existe algun lote para este elaborado
+        $ultimoLote = $this->lotesModel->obtenerLotePorIdElaboracion((int)$elaboradoId);
+        // si existe un lote obtener la información de los ingredientes del ultimo lote
+        $ingredientesUltimoLote = [];
+        if ($ultimoLote) {
+            $ingredientesUltimoLote = $this->lotesModel->getIngredientesPorLoteId((int)$ultimoLote['id']);
+        }
+        $ingredientesLotes = $this->lotesModel->getAllIngredientesLotes();
+
 
         // Para cada id_ingredinte obtener su información base de la tabla ingedientes y unidades y la asociación de alérgenos
         $ingredientes = $this->ingredienteModel->allIngredientes($this->pdo);
@@ -183,7 +192,7 @@ final class LotesController
             $createdLoteId = $this->lotesModel->crearLote($data);
             $this->pdo->commit();
             // Tabla lotes: id, elaboracion_id, numero_lote, fecha_producción, fecha_caducidad, peso_total, unidad_peso, temp_inicio, temp_fin, parent_lote_id, is_derivado, created_at
-            Redirect::to("/lotes/print?id={$createdLoteId}");
+            Redirect::to("/lotes/imprimir?id={$createdLoteId}");
         /*} catch (\Exception $e) {
             $this->pdo->rollBack();
             http_response_code(500); // Internal Server Error
