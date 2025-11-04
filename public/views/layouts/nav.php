@@ -65,7 +65,7 @@ $menus = [
   Access::M_INGREDIENTES => ['label' => 'Ingredientes', 'href' => '/ingredientes.php'],
   Access::M_ELABORADOS   => ['label' => 'Elaborados',   'href' => '/elaborados.php'],
   Access::M_LOTES        => ['label' => 'Lotes',        'href' => '/lotes.php'],
-  Access::M_IMPRESION    => ['label' => 'Impresión',    'href' => '/impresion.php'],
+  Access::M_IMPRESION    => ['label' => 'Impresión',    'href' => '/imprimir.php'],
   Access::M_APPCC        => ['label' => 'APPCC',        'href' => '/appcc.php'],
   Access::M_CALIDAD      => ['label' => 'Calidad',      'href' => '/calidad.php'],
   Access::M_USUARIOS     => ['label' => 'Usuarios',     'href' => '/usuarios.php'],

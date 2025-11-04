@@ -59,7 +59,7 @@ $menusCatalog = [
     ],
     Access::M_IMPRESION => [
         'label' => 'Impresión',
-        'href'  => '/impresion.php',
+        'href'  => '/imprimir.php',
         'desc'  => 'Impresión individual (EZPL), plantillas y reimpresión.',
     ],
     Access::M_APPCC => [
