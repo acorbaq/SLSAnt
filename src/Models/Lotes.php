@@ -243,4 +243,27 @@ final class Lotes
 
         return $numeroLote;
     }
+
+    // Metodo para obtener todos los lotes
+    public function getAllLotes(): array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes ORDER BY created_at DESC");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);    
+    }
+    // Metodo para obtener un lote por su ID
+    public function getLoteById(int $loteId): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes WHERE id = :id LIMIT 1");
+        $stmt->execute(['id' => $loteId]);
+        $lote = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $lote ?: null;
+    }
+    // Metodo para obtener los ingredientes asociados a un lote
+    public function getIngredientesByLoteId(int $loteId): array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes_ingredientes WHERE lote_elaboracion_id = :lote_elaboracion_id");
+        $stmt->execute(['lote_elaboracion_id' => $loteId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }   
 }
