@@ -22,7 +22,7 @@ $ingredientes = $ingredientes ?? [];
 $unidades = $unidades ?? [];
 $elaborado = $elaborado ?? ['id_elaborado' => null, 'nombre' => '', 'dias_viabilidad' => 0];
 $ingredientesElaborado = $ingredientesElaborado ?? [];
-$productosComerciales = $productosComerciales ?? [];
+$productosComerciales = $ingredientesLotes ?? [];
 $csrf = $csrfToken ?? '';
 $canModify = isset($canModify) ? (bool)$canModify : true;
 $tiposElaboracion = $tiposElaboracion ?? [];
@@ -335,7 +335,12 @@ $fechaCadDefault = $diasViabilidad > 0
   </div>
 `;
         document.body.appendChild(m);
-        m.querySelector('#pc-modal-close').addEventListener('click', () => m.classList.add('hidden'));
+        m.querySelector('#pc-modal-close').addEventListener('click', () => {
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+            delete m.dataset.filterIngrediente;
+            delete m.dataset.targetIndex;
+        });
         return m;
     }
 
@@ -348,29 +353,39 @@ $fechaCadDefault = $diasViabilidad > 0
     function renderList(filter='') {
         pcListEl.innerHTML = '';
         const q = (filter || '').toLowerCase();
+        const filterIng = modal.dataset.filterIngrediente || '';
         productosComerciales.forEach(pc => {
-            const label = (pc.nombre || '') + (pc.referencia ? ' — ' + pc.referencia : '') + (pc.peso_total ? (' (' + pc.peso_total + ')') : '');
+            // Campos adaptados a la estructura de lote_ingredientes
+            const ingredienteNombre = pc.ingrediente_resultante || pc.nombre || '';
+            const loteRef = pc.lote || pc.referencia_proveedor || pc.referencia || pc.numero_lote || '';
+            const fecha = pc.fecha_caducidad || pc.p_fecha || pc.created_at || '';
+            const label = `${ingredienteNombre}${loteRef ? ' — ' + loteRef : ''}${pc.peso ? (' ('+pc.peso+')') : ''}`;
+            // si hay filtro por ingrediente, saltar si no coincide
+            if (filterIng && String(pc.ingrediente_id || pc.ingrediente || '') !== String(filterIng)) return;
             if (q && label.toLowerCase().indexOf(q) === -1) return;
-            const item = document.createElement('div');
-            item.className = 'p-2 border rounded hover:bg-gray-50 flex justify-between items-center';
-            const fecha = pc.fecha_caducidad || pc.p_fecha || '';
-            const ref = (pc.referencia || pc.numero_lote || '') || '';
+             const item = document.createElement('div');
+             item.className = 'p-2 border rounded hover:bg-gray-50 flex justify-between items-center';
             item.innerHTML = `<div class="text-sm"><div class="font-medium">${escapeHtml(label)}</div><div class="text-xs text-gray-500">Cad: ${escapeHtml(fecha || '-')}</div></div>
-                <div><button data-id="${escapeHtml(pc.id || '')}" data-nombre="${escapeHtml(label)}" data-fecha="${escapeHtml(fecha)}" data-ref="${escapeHtml(ref)}" class="px-3 py-1 bg-teal-600 text-white rounded text-sm select-pc">Seleccionar</button></div>`;
-            pcListEl.appendChild(item);
-        });
-    }
+                <div><button data-id="${escapeHtml(pc.id || '')}" data-nombre="${escapeHtml(label)}" data-fecha="${escapeHtml(fecha)}" data-ref="${escapeHtml(loteRef)}" class="px-3 py-1 bg-teal-600 text-white rounded text-sm select-pc">Seleccionar</button></div>`;
+             pcListEl.appendChild(item);
+         });
+     }
     pcSearch.addEventListener('input', (e) => renderList(e.target.value));
     renderList();
 
     document.querySelectorAll('.load-partida').forEach(btn => {
         btn.addEventListener('click', function() {
-            const idx = this.getAttribute('data-index');
+             const idx = this.getAttribute('data-index');
+            // tomar también el id del ingrediente para filtrar la lista
             modal.dataset.targetIndex = idx;
+            const container = document.querySelector('[data-index="' + idx + '"]');
+            const ingId = container?.querySelector('input[name="ingredientes[' + idx + '][id_ingrediente]"]')?.value || '';
+            if (ingId) modal.dataset.filterIngrediente = ingId;
             pcSearch.value = '';
             renderList();
             modal.classList.remove('hidden');
-        });
+            modal.classList.add('flex');
+         });
     });
 
     modal.addEventListener('click', function(e) {
@@ -399,6 +414,9 @@ $fechaCadDefault = $diasViabilidad > 0
         if (fechaIngredInput && fecha) fechaIngredInput.value = fecha;
 
         modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        delete modal.dataset.filterIngrediente;
+        delete modal.dataset.targetIndex;
     });
 
     document.querySelectorAll('.load-last').forEach(btn => {
@@ -416,8 +434,8 @@ $fechaCadDefault = $diasViabilidad > 0
                 return fb - fa;
             });
             const last = matches[0];
-            const ref = (last.referencia || last.numero_lote || last.nombre || '').toString();
-            const fecha = last.fecha_caducidad || '';
+            const ref = (last.lote || last.referencia_proveedor || last.referencia || last.numero_lote || last.nombre || '').toString();
+            const fecha = last.fecha_caducidad || last.p_fecha || '';
             const id = last.id || '';
 
             const refInput = container.querySelector('.pc-ref');
@@ -476,13 +494,6 @@ $fechaCadDefault = $diasViabilidad > 0
             if (isNaN(tempInicioVal) || isNaN(tempFinalVal)) {
                 alert('Las temperaturas deben ser números válidos.');
                 try { (isNaN(tempInicioVal) ? tempInicioEl : tempFinalEl).focus(); } catch(_) {}
-                e.preventDefault();
-                return;
-            }
-
-            if (tempFinalVal < tempInicioVal) {
-                alert('La temperatura final no puede ser menor que la temperatura de inicio.');
-                try { tempFinalEl.focus(); } catch(_) {}
                 e.preventDefault();
                 return;
             }
