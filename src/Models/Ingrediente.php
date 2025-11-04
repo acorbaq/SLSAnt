@@ -338,4 +338,15 @@ class Ingrediente
         $stmt = $pdo->prepare("DELETE FROM ingredientes_alergenos WHERE id_ingrediente = :id");
         $stmt->execute([':id' => $idIngrediente]);
     }
+    // obtener todos los alegenos de un ingrediente por id
+    public function obtenerAlergenosPorIngredienteId(PDO $pdo, int $idIngrediente): array
+    {
+        $stmt = $pdo->prepare("SELECT a.id_alergeno, a.nombre
+                               FROM alergenos a
+                               JOIN ingredientes_alergenos ia ON a.id_alergeno = ia.id_alergeno
+                               WHERE ia.id_ingrediente = :id");
+        $stmt->execute([':id' => $idIngrediente]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $rows === false ? [] : $rows;
+    }
 }
