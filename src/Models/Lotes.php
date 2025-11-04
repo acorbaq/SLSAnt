@@ -251,6 +251,13 @@ final class Lotes
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);    
     }
+    // obtener todos los los ingredientes de todos los lotes
+    public function getAllIngredientesLotes(): array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes_ingredientes ORDER BY created_at DESC");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);    
+    }
     // Metodo para obtener un lote por su ID
     public function getLoteById(int $loteId): ?array
     {
@@ -265,5 +272,12 @@ final class Lotes
         $stmt = $this->pdo->prepare("SELECT * FROM lotes_ingredientes WHERE lote_elaboracion_id = :lote_elaboracion_id");
         $stmt->execute(['lote_elaboracion_id' => $loteId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }   
+    }
+    // Metodo para obtener los ingredientes asociados a un lote por su ID
+    public function getIngredientesPorLoteId(int $loteId): array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes_ingredientes WHERE lote_elaboracion_id = :lote_elaboracion_id");
+        $stmt->execute(['lote_elaboracion_id' => $loteId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
