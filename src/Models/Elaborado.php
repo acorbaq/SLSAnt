@@ -525,6 +525,7 @@ final class Elaborado
         }
         return (int)$row['id_ingrediente'];
     }
+
     public function getTiposElaboracion(): array
     {
         $sql = 'SELECT nombre FROM tipo_elaboracion ORDER BY nombre ASC';
@@ -590,4 +591,29 @@ final class Elaborado
 
         return $tipos;
     }
+    // Obetener id de un elaborado a partir del id de un ingrediente siendo el ingrediente origen
+    public function getElaboradoIdByIngredienteOrigen(int $idIngrediente): ?int
+    {
+        $sql = 'SELECT id_elaborado FROM elaborados_ingredientes WHERE id_ingrediente = :idIngrediente AND es_origen = 1 LIMIT 1';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idIngrediente' => $idIngrediente]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false || !isset($row['id_elaborado'])) {
+            return null;
+        }
+        return (int)$row['id_elaborado'];
+    }
+    // booleanos para saber si un ingrediente de un elaborado es origen
+    public function isIngredienteOrigen(int $idElaborado, int $idIngrediente): bool
+    {
+        $sql = 'SELECT es_origen FROM elaborados_ingredientes WHERE id_elaborado = :idElaborado AND id_ingrediente = :idIngrediente LIMIT 1';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':idElaborado' => $idElaborado, ':idIngrediente' => $idIngrediente]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false || !isset($row['es_origen'])) {
+            return false;
+        }
+        return ((int)$row['es_origen'] === 1);
+    }
+    
 }
