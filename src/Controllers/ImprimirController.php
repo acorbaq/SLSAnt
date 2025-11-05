@@ -49,7 +49,7 @@ final class ImprimirController
             // Manejamos el post prindipal de impresión de Lotes
             $action = $_POST['action'] ?? null;
             $loteId = $_POST['lote_id'] ?? null;
-            if ($action !== 'imprimirLote') {
+            if ($action === 'imprimirLote') {
                 $cantidad = (int)($_POST['cantidad'] ?? 1);
                 $this->imprimirLote($loteId, $cantidad);
             }
@@ -138,5 +138,162 @@ final class ImprimirController
         $roles = Access::getUserRoles($this->pdo, (int)$viewer['id']);
         $principal = Access::highestRole($roles);
         return in_array($principal, ['admin', 'gestor'], true);
+    }
+
+    // Lógica de impresión del lote
+    private function imprimirLote($loteId, $cantidad): void
+    {
+        // preparamos una variable de respuesta
+        $rsp = [
+            'success' => false,
+            'message' => '',
+        ];
+        // 1. obtenemos el lote completo y sus ingredientes
+        $lote = $this->lotesModel->getLoteById((int)$loteId);
+        if (!$lote) {
+            http_response_code(404);
+            $rsp['message'] = 'Lote no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+        $loteIngredientes = $this->lotesModel->getIngredientesByLoteId((int)$loteId);
+        if (empty($loteIngredientes)) {
+            http_response_code(400);
+            $rsp['message'] = 'El lote no tiene ingredientes para imprimir.';
+            echo json_encode($rsp);
+            exit;
+        }
+        $elaboradoLote = $this->elaboradoModel->findById((int)$lote['elaboracion_id']);
+        if (!$elaboradoLote) {
+            http_response_code(404);
+            $rsp['message'] = 'Elaborado del lote no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+
+        if ($elaboradoLote['tipo'] > 2){
+            // Si el lote es de tipo 3 o 4 (subelaborados) en lugar de tomar como ingredientes los ingredientes del lote se debe 
+            // obtener los ingredientes del ingrediente del elaborado.
+            // si el el lote solo tiene un ingrediente este ingrediente es el elaborado que contiene los ingredientes reales
+            if (count($loteIngredientes) === 1) {
+                // nos aseguramos de que esto sea así y no se trate de un envasado simple sin elaboración
+                $ingredienteId = (int)$loteIngredientes[0]['ingrediente_id'];
+                if ($this->elaboradoModel->isIngredienteOrigen($lote['elaboracion_id'],$ingredienteId)) {
+                    $loteIdSublotes = $this->elaboradoModel->getElaboradoIdByIngredienteOrigen($ingredienteId);
+                    $loteIngredientes = $this->elaboradoModel->getIngredienteElaborado((int)$loteIdSublotes);
+                }
+            }
+        }
+        // 2. Creamos las variables que necesitamos para la impresión
+        // lista de elementos de la etiqueta: nombre elaboración, lista de ingredientes ordenada por peso y con * en los productos que incluyan alergenos,
+        // lista de alergenos (únicos) presentes en los ingredientes, fecha de elaboración, fecha de caducidad, lote, tipo.
+
+        $nombreLb = $elaboradoLote['nombre'] ?? '';
+        if (!$nombreLb) {
+            http_response_code(404);
+            $rsp['message'] = 'Nombre de elaboración no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+        $ingredientesLb = '';
+        //programación literada a seguir
+        //1. ordenar ingredientes por peso descendente
+        usort($loteIngredientes, function ($a, $b) {
+            return ($b['peso'] ?? 0) <=> ($a['peso'] ?? 0);
+        });
+        //2. construir la lista de ingredientes. La lista de ingrediente es una cadena con el formato "Ingrediente1*, Ingrediente2, Ingrediente3 (Ingrediente3a, Ingrediente3b*, Ingrediente 3c)*, ..."
+        $idIngredientes = [];
+        foreach ($loteIngredientes as $li) {
+            // Programación literada a seguir:
+            // 2.1. normalizar el id del ingrediente ajustando su origen opciones id_ingrediente (si viene de subelaborado) o ingrediente_id (si viene de Lote)
+            $ingredienteId = (int)($li['ingrediente_id'] ?? $li['id_ingrediente'] ?? 0);
+            // Si el subingrediente es origen saltar el bucle
+            if ($this->elaboradoModel->isIngredienteOrigen((int)$lote['elaboracion_id'],$ingredienteId)) {
+                continue;
+            }
+
+            $idIngredientes[] = $ingredienteId;
+            // 2.2. comprobar si el ingrediente tiene alergenos mediante la función obtenerAlergenosPorIngredienteId
+            $alergenos = $this->ingredienteModel->obtenerAlergenosPorIngredienteId($this->pdo, $ingredienteId);
+            // 2.3. si tiene alergenos añadir * al nombre del ingrediente
+            $ingredienteNombre = $li['nombre'] ?? $li['ingrediente_resultante'] ?? 'Ingrediente #' . $ingredienteId;
+            if (!empty($alergenos)) {
+                $ingredienteNombre .= '*';
+            }
+            // 2.4. añadir el ingrediente a la lista de ingredientes
+            if ($ingredientesLb !== '') {
+                $ingredientesLb .= ', ';
+            }
+            $ingredientesLb .= $ingredienteNombre;
+            // obtenemos de forma segura el id del elaborado para dicho ingrediente si existe
+            $idElaboradoSubingrediente = $this->elaboradoModel->getElaboradoIdByIngredienteOrigen($ingredienteId);
+            // 2.5. Comprobamos si el ingrediente tiene subingredientes (si es un elaborado)
+            if ($idElaboradoSubingrediente !== $elaboradoLote) {
+                // obtenemos los subingredientes
+                $subingredientes = $this->elaboradoModel->getIngredienteElaborado((int)$idElaboradoSubingrediente);
+                if (!empty($subingredientes)) {
+                    usort($subingredientes, function ($a, $b) {
+                        return ($b['peso'] ?? 0) <=> ($a['peso'] ?? 0);
+                    });
+                    $subingredientesLb = '';
+                    // construimos la lista de subingredientes
+                    foreach ($subingredientes as $si) {
+                        $subingredienteId = (int)($si['ingrediente_id'] ?? $si['id_ingrediente'] ?? 0);
+                        // Si el subingrediente es origen saltar el bucle
+                        if ($this->elaboradoModel->isIngredienteOrigen((int)$idElaboradoSubingrediente,$subingredienteId)) {
+                            continue;
+                        }
+                        $idIngredientes[] = $subingredienteId;
+                        $subalergenos = $this->ingredienteModel->obtenerAlergenosPorIngredienteId($this->pdo, $subingredienteId);
+                        $subingredienteNombre = $si['nombre'] ?? 'Ingrediente #' . $subingredienteId;
+                        if (!empty($subalergenos)) {
+                            $subingredienteNombre .= '*';
+                        }
+                        if ($subingredientesLb !== '') {
+                            $subingredientesLb .= ', ';
+                        }
+                        $subingredientesLb .= $subingredienteNombre;
+                    }
+                    // añadimos la lista de subingredientes entre paréntesis al ingrediente principal
+                    $ingredientesLb .= ' (' . $subingredientesLb . ')';
+                }
+            }
+        }
+        // Limpiar ingredientes
+        $alergenosPresentes = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($idIngredientes);
+        $alergenosLb = '';
+        if (!empty($alergenosPresentes)) {
+            foreach ($alergenosPresentes as &$alergeno) {
+                $alergenoNombres = $this->ingredienteModel->obtenerNombreAlergenosPorIdAlergeno((int)$alergeno);
+                if (!empty($alergenoNombres)) {
+                    $alergeno = $alergenoNombres[0];
+                } else {
+                    $alergeno = 'Alergeno #' . $alergeno;
+                }
+            }
+            $alergenosLb = implode(', ', $alergenosPresentes);
+            $alergenosLb .= '.';
+        }
+        // 3. preparar los datos para la vista de impresión
+        $viewData = [
+            'nombreLb' => $nombreLb,
+            'ingredientesLb' => $ingredientesLb,
+            'alergenosLb' => $alergenosLb,
+            'fechaElaboracion' => $lote['fecha_produccion'] ?? '',
+            'fechaCaducidad' => $lote['fecha_caducidad'] ?? '',
+            'loteCodigo' => $lote['numero_lote'] ?? '',
+            'tipoElaboracion' => $elaboradoLote['tipo'] ?? '',
+            'cantidad' => $cantidad,
+        ];
+        echo '<pre>'; // --- IGNORE ---
+        print_r($viewData); // --- IGNORE ---
+        echo '</pre>'; // --- IGNORE ---
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Datos preparados para impresión.',
+            'data' => $viewData,
+        ]);
+
     }
 }
