@@ -14,6 +14,8 @@ use App\Models\Lotes;
 use App\Models\Unit;
 use App\Models\Imprimir;
 use PDO;
+use App\Services\TraductorEZPL;
+use App\Utils\Printer as PrinterUtil;
 
 final class ImprimirController
 {
@@ -259,6 +261,7 @@ final class ImprimirController
                 }
             }
         }
+        $ingredientesLb .= '.';
         // Limpiar ingredientes
         $alergenosPresentes = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($idIngredientes);
         $alergenosLb = '';
@@ -274,6 +277,7 @@ final class ImprimirController
             $alergenosLb = implode(', ', $alergenosPresentes);
             $alergenosLb .= '.';
         }
+        $conservacionLb = $elaboradoLote['descripcion'] ?? '';
         // 4. Transformas las fechas a fomrato dd/mm/yyyy
         // Transformar fechas a formato europeo dd/mm/YYYY
         $fechaElabRaw = $lote['fecha_produccion'] ?? null;
@@ -311,11 +315,29 @@ final class ImprimirController
             'nombreLb' => $nombreLb,
             'ingredientesLb' => $ingredientesLb,
             'alergenosLb' => $alergenosLb,
+            'conservacionLb' => $conservacionLb,
             'fechaElaboracion' => $fechaElab ?? '',
             'fechaCaducidad' => $fechaCad ?? '',
             'loteCodigo' => $lote['numero_lote'] ?? '',
             'tipoElaboracion' => $elaboradoLote['tipo'] ?? '',
             'cantidad' => $cantidad,
         ];
+
+        // Intentar generar EZPL y enviar a impresora
+        try {
+            $ezpl = TraductorEZPL::generateEZPL($viewData, (int)$cantidad);
+            // ver $ezpl en /tmp/preview_etiqueta.ezpl
+            echo $ezpl;
+            // guardar preview en tmp
+            @file_put_contents(sys_get_temp_dir() . '/preview_etiqueta.ezpl', $ezpl);
+            // enviar a impresora (nombre de cola por defecto 'godex_raw', cámbialo si hace falta)
+            $printed = PrinterUtil::printEzpl($ezpl, 'godex_raw');
+
+            $rsp['success'] = $printed;
+            $rsp['message'] = $printed ? 'Impresión enviada correctamente.' : 'Error al enviar a la impresora. Revisa /tmp/print_debug.log';
+        } catch (\Throwable $e) {
+            $rsp['success'] = false;
+            $rsp['message'] = 'Excepción al generar/imprimir: ' . $e->getMessage();
+        }
     }
 }
