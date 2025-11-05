@@ -98,6 +98,8 @@ final class ImprimirController
         $loteIngredientes = $this->lotesModel->getIngredientesByLoteId((int)$lote['id']);
         // obtener información del elaborado
         $elaborado = $this->elaboradoModel->findById((int)$lote['elaboracion_id']);
+        // Obtener tipos de elaboración para categorizar
+        $tiposElaborado = $this->elaboradoModel->getTipos();
         // obtener información relevante de ingredientes y alergenos para $loteIngredientes
         foreach ($loteIngredientes as &$li) {
             $ingrediente = $this->ingredienteModel->findById($this->pdo,(int)$li['ingrediente_id']);
