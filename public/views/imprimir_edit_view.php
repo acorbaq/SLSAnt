@@ -1,5 +1,5 @@
-
 <?php
+
 /**
  * public/views/imprimir_edit_view.php
  * Vista (solo presentación) para mostrar información del lote, elaboración e ingredientes
@@ -23,7 +23,8 @@ $elaborado = $elaborado ?? ($data['elaborado'] ?? null);
 $tiposElaborado = $tiposElaborado ?? [];
 $mode = $mode ?? ($data['mode'] ?? null);
 
-function getTipoNombreById(array $tipos, $id): string {
+function getTipoNombreById(array $tipos, $id): string
+{
     foreach ($tipos as $t) {
         if ((int)($t['id'] ?? null) === (int)$id) {
             return (string)($t['nombre'] ?? '');
@@ -32,8 +33,14 @@ function getTipoNombreById(array $tipos, $id): string {
     return '';
 }
 
-function esc($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-function format_date_attr($d) { return $d ? esc($d) : ''; }
+function esc($v)
+{
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+function format_date_attr($d)
+{
+    return $d ? esc($d) : '';
+}
 
 // Detectar modo a partir de $elaborado['tipo'] y $tiposElaborado
 $tipo_id = $elaborado['tipo'] ?? null;
@@ -51,7 +58,7 @@ if (!empty($tipo_nombre)) {
         $tipo_slug = 'envasado';
     } else {
         // fallback: slug simple del nombre
-        $tipo_slug = preg_replace('/[^a-z0-9]+/','-', preg_replace('/\s+/','-', preg_replace('/[^\x20-\x7E]/','', $n)));
+        $tipo_slug = preg_replace('/[^a-z0-9]+/', '-', preg_replace('/\s+/', '-', preg_replace('/[^\x20-\x7E]/', '', $n)));
     }
 }
 
@@ -73,13 +80,21 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
 
                 <!-- Controles de impresión (solo UI; la acción debe conectarse con JS) -->
                 <div class="flex gap-2 items-center">
-                    <button type="button"
-                        data-action="print-label"
-                        data-print-mode="<?= esc($mode ?? 'default') ?>"
-                        class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded shadow hover:bg-green-500 focus:outline-none"
-                        title="Imprimir la etiqueta principal del lote">
-                        Imprimir etiqueta
-                    </button>
+                    <form method="post" action="/imprimir.php">
+                        <input type="hidden" name="action" value="imprimirLote">
+                        <input type="hidden" name="lote_id" value="<?= esc($lote['id'] ?? '0') ?>">
+                        <input type="hidden" name="csrf" value="<?= esc($csrfToken ?? '') ?>">
+                        <input id="cantidad_lote"
+                            name="cantidad" type="number" min="1" value="1"
+                            class="w-16 text-sm px-2 py-1 border rounded" />
+                        <button type="submit"
+                            data-action="print-label"
+                            data-print-mode="<?= esc($mode ?? 'default') ?>"
+                            class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded shadow hover:bg-green-500 focus:outline-none"
+                            title="Imprimir la etiqueta principal del lote">
+                            Imprimir etiqueta
+                        </button>
+                    </form>
                 </div>
             </header>
 
@@ -100,7 +115,7 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                         <dd class="mt-1 text-gray-800">
                             <?php if (!empty($lote['fecha_produccion'])): ?>
                                 <time datetime="<?= format_date_attr($lote['fecha_produccion']) ?>"><?= esc($lote['fecha_produccion']) ?></time>
-                            <?php else: ?>—<?php endif; ?>
+                                <?php else: ?>—<?php endif; ?>
                         </dd>
                     </div>
 
@@ -109,7 +124,7 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                         <dd class="mt-1 text-gray-800">
                             <?php if (!empty($lote['fecha_caducidad'])): ?>
                                 <time datetime="<?= format_date_attr($lote['fecha_caducidad']) ?>"><?= esc($lote['fecha_caducidad']) ?></time>
-                            <?php else: ?>—<?php endif; ?>
+                                <?php else: ?>—<?php endif; ?>
                         </dd>
                     </div>
 
@@ -170,7 +185,7 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                                     $ref = $ing['referencia_proveedor'] ?? $ing['lote'] ?? '';
                                     $cad = $ing['fecha_caducidad'] ?? '';
                                     $alergenos = $ing['alergenos'] ?? ($ing['ingrediente']['alergenos'] ?? []);
-                                    $alergenos_txt = !empty($alergenos) ? implode(', ', array_map(fn($a)=>$a['nombre'] ?? $a, $alergenos)) : '';
+                                    $alergenos_txt = !empty($alergenos) ? implode(', ', array_map(fn($a) => $a['nombre'] ?? $a, $alergenos)) : '';
                                 ?>
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-4 py-3 align-top"><?= esc($ingNombre) ?></td>
@@ -190,13 +205,26 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                                         <?php if ($show_individual_print_buttons): ?>
                                             <td class="px-4 py-3 align-top">
                                                 <div class="flex gap-2">
-                                                    <button type="button"
-                                                        class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
-                                                        data-action="print-ingrediente"
-                                                        data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
-                                                        data-ingrediente-nombre="<?= esc($ingNombre) ?>">
-                                                        Imprimir
-                                                    </button>
+                                                    <form method="post" action="/imprimir.php" class="inline-flex items-center gap-2">
+                                                        <input type="hidden" name="action" value="imprimirIngrediente">
+                                                        <input type="hidden" name="lote_id" value="<?= esc($lote['id'] ?? '0') ?>">
+                                                        <input type="hidden" name="ingrediente_id" value="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '0') ?>">
+                                                        <input type="hidden" name="csrf" value="<?= esc($csrfToken ?? '') ?>">
+
+                                                        <label for="cantidad_ing_<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? 'x') ?>" class="sr-only">Cantidad</label>
+                                                       <input id="cantidad_ing_<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? 'x') ?>"
+                                                           name="cantidad" type="number" min="1" value="1"
+                                                           class="w-16 text-sm px-2 py-1 border rounded" />
+
+                                                        <button type="submit"
+                                                                class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
+                                                                data-action="print-ingrediente"
+                                                                data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
+                                                                data-ingrediente-nombre="<?= esc($ingNombre) ?>"
+                                                                title="Imprimir etiqueta del ingrediente">
+                                                            Imprimir
+                                                        </button>
+                                                    </form>
                                                     <!-- delegado: el controlador/JS puede usar data-* para abrir modal o hacer fetch -->
                                                 </div>
                                             </td>
@@ -217,7 +245,7 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
             <div class="mb-4">
                 <div class="text-xs text-gray-500 font-semibold">Producto</div>
                 <div class="mt-1 text-lg font-semibold text-gray-800"><?= esc($elaborado['nombre'] ?? '---') ?></div>
-                <div class="text-xs text-gray-500 mt-1">Peso obtenido: <span class="font-medium text-gray-700"><?= esc($elaborado['peso_obtenido'] ?? ($lote['peso_total'] ?? '—')) ?></span></div>
+                <div class="text-xs text-gray-500 mt-1">Peso obtenido: <span class="font-medium text-gray-700"><?= esc($lote['peso_total'] ?? ($lote['peso_total'] ?? '—')) ?> <span class="font-medium text-gray-700"><?= esc($lote['unidad_peso'] ?? ($lote['unidad_peso'] ?? '—')) ?></span></div>
             </div>
 
             <div class="mb-4">
@@ -237,7 +265,7 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                             $name = $ing['ingrediente_resultante'] ?? ($ing['ingrediente']['nombre'] ?? '');
                             $ref = $ing['referencia_proveedor'] ?? $ing['lote'] ?? '';
                             $alergenos = $ing['alergenos'] ?? ($ing['ingrediente']['alergenos'] ?? []);
-                            $alergenos_txt = !empty($alergenos) ? implode(', ', array_map(fn($a)=>$a['nombre'] ?? $a, $alergenos)) : '';
+                            $alergenos_txt = !empty($alergenos) ? implode(', ', array_map(fn($a) => $a['nombre'] ?? $a, $alergenos)) : '';
                         ?>
                             <li class="border rounded p-3 bg-gray-50 flex justify-between items-start">
                                 <div>
@@ -248,13 +276,21 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
 
                                 <?php if ($show_individual_print_buttons): ?>
                                     <div class="ml-3 flex-shrink-0">
-                                        <button type="button"
-                                            class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
-                                            data-action="print-ingrediente"
-                                            data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
-                                            data-ingrediente-nombre="<?= esc($name) ?>">
-                                            Imprimir
-                                        </button>
+                                        <form method="post" action="/imprimir.php" class="inline-flex items-center gap-2">
+                                            <input type="hidden" name="action" value="imprimirIngrediente">
+                                            <input type="hidden" name="lote_id" value="<?= esc($lote['id'] ?? '0') ?>">
+                                            <input type="hidden" name="ingrediente_id" value="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '0') ?>">
+                                            <input type="hidden" name="csrf" value="<?= esc($csrfToken ?? '') ?>">
+                                            <input type="hidden" name="cantidad" value="1" />
+                                            <button type="submit"
+                                                    class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
+                                                    data-action="print-ingrediente"
+                                                    data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
+                                                    data-ingrediente-nombre="<?= esc($ingNombre) ?>"
+                                                    title="Imprimir etiqueta del ingrediente">
+                                                Imprimir
+                                            </button>
+                                        </form>
                                     </div>
                                 <?php endif; ?>
                             </li>
