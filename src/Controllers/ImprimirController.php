@@ -45,6 +45,19 @@ final class ImprimirController
                 // Si get es otro tipo cargar render list
                 $this->renderList();
             }
+        } elseif ($method === 'POST') {
+            // Manejamos el post prindipal de impresión de Lotes
+            $action = $_POST['action'] ?? null;
+            $loteId = $_POST['lote_id'] ?? null;
+            if ($action !== 'imprimirLote') {
+                $cantidad = (int)($_POST['cantidad'] ?? 1);
+                $this->imprimirLote($loteId, $cantidad);
+            }
+            $this->renderView($loteId);
+        } else {
+            http_response_code(405);
+            echo "Método no permitido.";
+            exit;
         }
     }
     
