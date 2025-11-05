@@ -192,7 +192,7 @@ final class LotesController
             $createdLoteId = $this->lotesModel->crearLote($data);
             $this->pdo->commit();
             // Tabla lotes: id, elaboracion_id, numero_lote, fecha_producción, fecha_caducidad, peso_total, unidad_peso, temp_inicio, temp_fin, parent_lote_id, is_derivado, created_at
-            Redirect::to("/lotes/imprimir?id={$createdLoteId}");
+            Redirect::to("/imprimir.php?view&id={$createdLoteId}");
         /*} catch (\Exception $e) {
             $this->pdo->rollBack();
             http_response_code(500); // Internal Server Error
