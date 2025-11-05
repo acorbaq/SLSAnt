@@ -173,6 +173,14 @@ class Ingrediente
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row === false ? null : $row['nombre'];
     }
+    // obtenerNombreAlergenosPorIdAlergeno
+    public function obtenerNombreAlergenosPorIdAlergeno(int $id): array
+    {
+        $stmt = $this->pdo->prepare("SELECT nombre FROM alergenos WHERE id_alergeno = :id");
+        $stmt->execute([':id' => $id]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $rows === false ? [] : array_column($rows, 'nombre');
+    }
     /**
      * createIngrediente
      *
@@ -347,6 +355,26 @@ class Ingrediente
                                WHERE ia.id_ingrediente = :id");
         $stmt->execute([':id' => $idIngrediente]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $rows === false ? [] : $rows;
+        return
+         $rows === false ? [] : $rows;
+    }
+    // booleanos para verificar si un ingrediente tiene alergenos asignados
+    public function tieneAlergenosById(PDO $pdo, int $idIngrediente): bool
+    {
+        $stmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM ingredientes_alergenos WHERE id_ingrediente = :id");
+        $stmt->execute([':id' => $idIngrediente]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row && isset($row['cnt']) && (int)$row['cnt'] > 0;
+    }
+    public function tieneAlergenosByName(PDO $pdo, string $nombreIngrediente): bool
+    {
+        $stmt = $pdo->prepare("SELECT i.id_ingrediente
+                               FROM ingredientes i
+                               JOIN ingredientes_alergenos ia ON i.id_ingrediente = ia.id_ingrediente
+                               WHERE i.nombre = :nombre
+                               LIMIT 1");
+        $stmt->execute([':nombre' => $nombreIngrediente]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row !== false;
     }
 }
