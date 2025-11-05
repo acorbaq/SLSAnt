@@ -274,26 +274,48 @@ final class ImprimirController
             $alergenosLb = implode(', ', $alergenosPresentes);
             $alergenosLb .= '.';
         }
-        // 3. preparar los datos para la vista de impresión
+        // 4. Transformas las fechas a fomrato dd/mm/yyyy
+        // Transformar fechas a formato europeo dd/mm/YYYY
+        $fechaElabRaw = $lote['fecha_produccion'] ?? null;
+        $fechaElab = null;
+        if ($fechaElabRaw) {
+            try {
+            if (is_numeric($fechaElabRaw)) {
+                $dt = (new \DateTime())->setTimestamp((int)$fechaElabRaw);
+            } else {
+                $dt = new \DateTime($fechaElabRaw);
+            }
+            $fechaElab = $dt->format('d/m/Y');
+            } catch (\Exception $e) {
+            // Si no se puede parsear, mantener el valor original como fallback
+            $fechaElab = (string)$fechaElabRaw;
+            }
+        }
+
+        $fechaCadRaw = $lote['fecha_caducidad'] ?? null;
+        $fechaCad = null;
+        if ($fechaCadRaw) {
+            try {
+            if (is_numeric($fechaCadRaw)) {
+                $dt = (new \DateTime())->setTimestamp((int)$fechaCadRaw);
+            } else {
+                $dt = new \DateTime($fechaCadRaw);
+            }
+            $fechaCad = $dt->format('d/m/Y');
+            } catch (\Exception $e) {
+            $fechaCad = (string)$fechaCadRaw;
+            }
+        }
+        // 4. preparar los datos para la vista de impresión
         $viewData = [
             'nombreLb' => $nombreLb,
             'ingredientesLb' => $ingredientesLb,
             'alergenosLb' => $alergenosLb,
-            'fechaElaboracion' => $lote['fecha_produccion'] ?? '',
-            'fechaCaducidad' => $lote['fecha_caducidad'] ?? '',
+            'fechaElaboracion' => $fechaElab ?? '',
+            'fechaCaducidad' => $fechaCad ?? '',
             'loteCodigo' => $lote['numero_lote'] ?? '',
             'tipoElaboracion' => $elaboradoLote['tipo'] ?? '',
             'cantidad' => $cantidad,
         ];
-        echo '<pre>'; // --- IGNORE ---
-        print_r($viewData); // --- IGNORE ---
-        echo '</pre>'; // --- IGNORE ---
-
-        echo json_encode([
-            'success' => true,
-            'message' => 'Datos preparados para impresión.',
-            'data' => $viewData,
-        ]);
-
     }
 }
