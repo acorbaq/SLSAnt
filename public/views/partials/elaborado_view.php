@@ -27,7 +27,10 @@ if ($elaborado !== null) {
     $isNew = true;
 }
 
-$pesoTotal = $elaborado['peso_total'] ?? 0.0;
+// Preferir el campo persistido real (peso_obtenido). Fallback a peso_total por compatibilidad.
+$pesoTotal = isset($elaborado['peso_obtenido'])
+    ? (float)$elaborado['peso_obtenido']
+    : (isset($elaborado['peso_total']) ? (float)$elaborado['peso_total'] : 0.0);
 $elaboracion = $elaborado['nombre'] ?? '';
 
 $entradas = $ingredienteElaborado ?? [];
@@ -140,7 +143,6 @@ function h($s)
 
                 <!-- Bloque de búsqueda -->
                 <div class="flex-1 min-w-0">
-                    <?php if ($isNew): ?>
                         <label class="block text-sm font-medium mb-1">Buscar ingrediente</label>
                         <input
                             id="ingrediente-search"
@@ -156,7 +158,6 @@ function h($s)
                                 <option value="<?php echo h($ingName); ?>"></option>
                             <?php endforeach; ?>
                         </datalist>
-                    <?php endif; ?>
 
                     <!-- SELECT oculto con metadata -->
                     <select id="ingrediente-select" aria-hidden="true" style="display:none;">
@@ -392,17 +393,43 @@ function h($s)
             return null;
         }
 
-        // Ajustada: Ignorar inputs vacíos (n.c.) al sumar el peso total
-        function updatePesoTotal() {
+        // --- NUEVO: control de carga inicial vs interacción usuario ---
+        var pesoField = document.getElementById('peso_total');
+        if (pesoField) {
+            // almacenar valor original cargado desde servidor
+            pesoField.dataset.original = (pesoField.value || '').toString();
+            // indicador de si el usuario ha modificado/interactuado
+            pesoField.dataset.userModified = '0';
+        }
+
+        function setUserModified() {
+            if (pesoField) pesoField.dataset.userModified = '1';
+        }
+
+        // Ajustada: Ignorar inputs vacíos (n.c.) al sumar el peso total.
+        // Solo escribir en el campo peso_total si:
+        //  - force === true (acción del usuario),
+        //  - o el usuario ya modificó antes (userModified === '1'),
+        //  - o no hay valor original cargado (campo vacío o 0).
+        function updatePesoTotal(force) {
+            force = !!force;
             var total = 0;
             document.querySelectorAll('input[name="cantidades[]"]').forEach(function(inp) {
                 var v = (inp.value || '').toString().trim();
                 if (v === '') return; // no contar campos vacíos (n.c.)
                 total += parseFloat(v) || 0;
             });
-            var pesoField = document.getElementById('peso_total');
-            if (pesoField) pesoField.value = total.toFixed(2);
+            if (!pesoField) return;
+            var original = pesoField.dataset.original || '';
+            var originalIsEmptyOrZero = original === '' || parseFloat(original) === 0;
+            if (force || pesoField.dataset.userModified === '1' || originalIsEmptyOrZero) {
+                pesoField.value = total.toFixed(2);
+            } else {
+                // mantener el valor original cargado desde servidor
+                pesoField.value = original;
+            }
         }
+        // --- FIN NUEVO --- //
 
         // Añadir ingrediente desde input + datalist/select oculto
         addBtn && addBtn.addEventListener('click', function() {
@@ -479,7 +506,9 @@ function h($s)
                 } catch (e) {}
             }
 
-            updatePesoTotal();
+            // marcar que el usuario ha modificado y forzar recalculo
+            setUserModified();
+            updatePesoTotal(true);
 
             // si existe helper, actualizar panel de indicaciones/alérgenos (el helper observa la lista)
             if (window.AppUIHelpers && typeof AppUIHelpers.syncIndicacionesForList === 'function') {
@@ -498,12 +527,25 @@ function h($s)
             var row = btn.closest && btn.closest('tr');
             if (row) {
                 row.remove();
-                updatePesoTotal();
+                // marcar que el usuario ha modificado y forzar recalculo
+                setUserModified();
+                updatePesoTotal(true);
+            }
+        }, false);
+
+        // Delegación para cambios en cantidades: marcar usuario y recalcular
+        listBody && listBody.addEventListener('input', function(e) {
+            var tgt = e.target;
+            if (!tgt) return;
+            if (tgt.matches && tgt.matches('.js-ing-cant-input')) {
+                setUserModified();
+                updatePesoTotal(true);
             }
         }, false);
 
         // inicializar suma si hay filas preexistentes
-        updatePesoTotal();
+        // NO forzamos la sobrescritura del campo si viene con valor desde el servidor.
+        updatePesoTotal(false);
 
         // inicializar sync de indicaciones para la lista (el helper observará cambios)
         if (window.AppUIHelpers && typeof AppUIHelpers.syncIndicacionesForList === 'function') {
