@@ -16,6 +16,7 @@ use App\Models\Imprimir;
 use PDO;
 use App\Services\TraductorEZPL;
 use App\Utils\Printer as PrinterUtil;
+use App\Utils\CsrfResponse;
 
 final class ImprimirController
 {
@@ -36,30 +37,43 @@ final class ImprimirController
 
     public function handleRequest(): void
     {
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        Csrf::init();
+        Auth::initSession();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            CsrfResponse::validateOrDie($_POST['csrf'] ?? null, 'json');
+            
+            // Continuar con la lógica...
+            $action = $_POST['action'] ?? null;
+            $loteId = $_POST['lote_id'] ?? null;
+            
+            if ($action === 'imprimirLote') {
+                // ✅ Validar entrada
+                if (!is_numeric($loteId) || (int)$loteId <= 0) {
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'ID de lote inválido.'
+                    ]);
+                    exit;
+                }
+                
+                $cantidad = filter_input(INPUT_POST, 'cantidad', FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1, 'max_range' => 100, 'default' => 1]
+                ]);
+                
+                $this->imprimirLote((int)$loteId, $cantidad);
+            }
+            return;
+        }
+        
         if ($method === 'GET') {
-            // Si Get es crear cargar vista de creación
             if (isset($_GET['view'])) {
-                // tomar el id del get y enviarlo al render create
                 $loteId = $_GET['id'] ?? null;
                 $this->renderView($loteId);
             } else {
-                // Si get es otro tipo cargar render list
                 $this->renderList();
             }
-        } elseif ($method === 'POST') {
-            // Manejamos el post prindipal de impresión de Lotes
-            $action = $_POST['action'] ?? null;
-            $loteId = $_POST['lote_id'] ?? null;
-            if ($action === 'imprimirLote') {
-                $cantidad = (int)($_POST['cantidad'] ?? 1);
-                $this->imprimirLote($loteId, $cantidad);
-            }
-            $this->renderView($loteId);
-        } else {
-            http_response_code(405);
-            echo "Método no permitido.";
-            exit;
         }
     }
     
@@ -143,8 +157,18 @@ final class ImprimirController
     }
 
     // Lógica de impresión del lote
-    private function imprimirLote($loteId, $cantidad): void
+    private function imprimirLote(int $loteId, int $cantidad): void
     {
+        // ✅ Validar permisos
+        if (!$this->canModify()) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'No tiene permisos para imprimir etiquetas.'
+            ]);
+            exit;
+        }
+
         // preparamos una variable de respuesta
         $rsp = [
             'success' => false,
