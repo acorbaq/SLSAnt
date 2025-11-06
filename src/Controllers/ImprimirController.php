@@ -125,6 +125,7 @@ final class ImprimirController
             echo "Lote no encontrado.";
             exit;
         }
+        $csrfToken = Csrf::generateToken();
         // obtener los ingredientes del lote
         $loteIngredientes = $this->lotesModel->getIngredientesByLoteId((int)$lote['id']);
         // obtener información del elaborado
@@ -367,5 +368,9 @@ final class ImprimirController
             $rsp['success'] = false;
             $rsp['message'] = 'Excepción al generar/imprimir: ' . $e->getMessage();
         }
+        // volver a la vista del lote/impresion
+        $url = '/imprimir.php?view=1&id=' . urlencode((string)$loteId);
+        Redirect::to($url);
+        exit;
     }
 }
