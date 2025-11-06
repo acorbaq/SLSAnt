@@ -126,16 +126,22 @@ final class LotesController
     // El formulario recibe los datos, los valida, crea los lotes y redirige a la vista de impresión del lote creado.
     private function createLote(array $postData): void
     {
-        // Validar CSRF
+        // ✅ MEJORADO: Mensaje claro y consistente
         if (!Csrf::validateToken($postData['csrf'] ?? '')) {
-            http_response_code(403); // Forbidden
-            echo "Token CSRF inválido. llego aqui por error";
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Token CSRF inválido. Recargue la página e intente nuevamente.'
+            ]);
             exit;
         }
-        $canModify = $this->canModify();
-        if (!$canModify) {
-            http_response_code(403); // Forbidden
-            echo "No tienes permiso para crear lotes.";
+        
+        if (!$this->canModify()) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'No tiene permisos para crear lotes.'
+            ]);
             exit;
         }
         // Aquí se procesarían los datos del formulario, se validarían y se crearían los lotes en la base de datos.
