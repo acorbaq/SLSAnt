@@ -13,6 +13,10 @@ $elaboradosLotes = $elaboradosLotes ?? [];
 $tiposElaboracion = $tiposElaboracion ?? [];
 $canModify = isset($canModify) ? (bool)$canModify : false;
 
+// Recoger query de búsqueda antes de usarla en el filtrado
+$q = trim((string)($_GET['q'] ?? ''));
+$qLower = $q !== '' ? mb_strtolower($q, 'UTF-8') : '';
+
 function getTipoNombreById(array $tipos, $id): string {
     foreach ($tipos as $t) {
         if ((int)($t['id'] ?? null) === (int)$id) {
@@ -43,6 +47,26 @@ foreach ($lotes as $lote) {
         $tipoNombre = getTipoNombreById($tiposElaboracion, $elaborado['tipo']);
     }
     $cat = categoriaDesdeNombre($tipoNombre);
+
+    // Si hay query, filtrar; buscamos en id, número de lote, fechas y nombre del elaborado
+    if ($qLower !== '') {
+        $hay = false;
+        $parts = [
+            (string)($lote['id'] ?? ''),
+            (string)($lote['numero_lote'] ?? ''),
+            (string)($lote['fecha_produccion'] ?? ''),
+            (string)($lote['fecha_caducidad'] ?? ''),
+            (string)($elaborado['nombre'] ?? ''),
+        ];
+        $hayString = mb_strtolower(implode(' ', $parts), 'UTF-8');
+        if (mb_strpos($hayString, $qLower) !== false) {
+            $hay = true;
+        }
+        if (!$hay) {
+            continue; // no coincide -> saltar este lote
+        }
+    }
+
     $groups[$cat][] = ['lote' => $lote, 'elaborado' => $elaborado];
 }
 
