@@ -39,8 +39,10 @@ final class ImprimirController
     {
         Csrf::init();
         Auth::initSession();
+    
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET'; 
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($method === 'POST') {
             CsrfResponse::validateOrDie($_POST['csrf'] ?? null, 'json');
             
             // Continuar con la lógica...
