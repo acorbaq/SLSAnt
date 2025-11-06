@@ -326,7 +326,10 @@ $fechaCadDefault = $diasViabilidad > 0
   <div class="bg-white rounded-lg max-w-2xl w-full mx-4 overflow-auto" role="dialog" aria-modal="true">
     <div class="p-4 border-b flex items-center justify-between">
       <strong>Seleccionar partida comercial</strong>
-      <button type="button" id="pc-modal-close" class="text-gray-600">Cerrar</button>
+      <div class="flex items-center gap-2">
+        <button type="button" id="pc-toggle-filter" class="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded">Mostrar todas</button>
+        <button type="button" id="pc-modal-close" class="text-gray-600">Cerrar</button>
+      </div>
     </div>
     <div class="p-4">
       <input id="pc-search" class="w-full rounded border-gray-300 px-3 py-2 mb-3" placeholder="Buscar por nombre o referencia" />
@@ -340,7 +343,22 @@ $fechaCadDefault = $diasViabilidad > 0
             m.classList.remove('flex');
             delete m.dataset.filterIngrediente;
             delete m.dataset.targetIndex;
+            delete m.dataset.filterDisabled;
         });
+
+        // toggle button: permite desactivar/activar el filtro por ingrediente
+        const toggle = m.querySelector('#pc-toggle-filter');
+        toggle.addEventListener('click', () => {
+            if (m.dataset.filterDisabled === '1') {
+                delete m.dataset.filterDisabled;
+                toggle.textContent = 'Mostrar todas';
+            } else {
+                m.dataset.filterDisabled = '1';
+                toggle.textContent = 'Filtrar por ingrediente';
+            }
+            renderList(pcSearch.value);
+        });
+
         return m;
     }
 
@@ -354,14 +372,15 @@ $fechaCadDefault = $diasViabilidad > 0
         pcListEl.innerHTML = '';
         const q = (filter || '').toLowerCase();
         const filterIng = modal.dataset.filterIngrediente || '';
+        const filterActive = !(modal.dataset.filterDisabled === '1'); // true = aplicar filtro por ingrediente
         productosComerciales.forEach(pc => {
             // Campos adaptados a la estructura de lote_ingredientes
             const ingredienteNombre = pc.ingrediente_resultante || pc.nombre || '';
             const loteRef = pc.lote || pc.referencia_proveedor || pc.referencia || pc.numero_lote || '';
             const fecha = pc.fecha_caducidad || pc.p_fecha || pc.created_at || '';
             const label = `${ingredienteNombre}${loteRef ? ' — ' + loteRef : ''}${pc.peso ? (' ('+pc.peso+')') : ''}`;
-            // si hay filtro por ingrediente, saltar si no coincide
-            if (filterIng && String(pc.ingrediente_id || pc.ingrediente || '') !== String(filterIng)) return;
+            // si hay filtro por ingrediente y está activo, saltar si no coincide
+            if (filterIng && filterActive && String(pc.ingrediente_id || pc.ingrediente || '') !== String(filterIng)) return;
             if (q && label.toLowerCase().indexOf(q) === -1) return;
              const item = document.createElement('div');
              item.className = 'p-2 border rounded hover:bg-gray-50 flex justify-between items-center';
@@ -380,7 +399,20 @@ $fechaCadDefault = $diasViabilidad > 0
             modal.dataset.targetIndex = idx;
             const container = document.querySelector('[data-index="' + idx + '"]');
             const ingId = container?.querySelector('input[name="ingredientes[' + idx + '][id_ingrediente]"]')?.value || '';
-            if (ingId) modal.dataset.filterIngrediente = ingId;
+            if (ingId) {
+                modal.dataset.filterIngrediente = ingId;
+                // aseguramos que el toggle muestre el estado correcto
+                const t = modal.querySelector('#pc-toggle-filter');
+                if (t) {
+                    // por defecto, cuando abrimos con filtro lo mostramos activo (por eso el texto sugiere "Mostrar todas")
+                    delete modal.dataset.filterDisabled;
+                    t.textContent = 'Mostrar todas';
+                }
+            } else {
+                delete modal.dataset.filterIngrediente;
+                const t = modal.querySelector('#pc-toggle-filter');
+                if (t) { delete modal.dataset.filterDisabled; t.textContent = 'Mostrar todas'; }
+            }
             pcSearch.value = '';
             renderList();
             modal.classList.remove('hidden');
