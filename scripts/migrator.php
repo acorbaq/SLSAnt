@@ -43,7 +43,7 @@ if (!($pdo instanceof PDO)) {
 }
 
 // Directorio donde se colocan las migraciones
-$migrationsDir = $root . '/migrations';
+$migrationsDir = $root . '/migrations/versiones';
 
 // Si no existe, lo creamos para facilitar el flujo de trabajo.
 if (!is_dir($migrationsDir)) {
