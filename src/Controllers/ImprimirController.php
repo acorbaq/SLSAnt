@@ -256,8 +256,10 @@ final class ImprimirController
                         }
                         $subingredientesLb .= $subingredienteNombre;
                     }
-                    // añadimos la lista de subingredientes entre paréntesis al ingrediente principal
-                    $ingredientesLb .= ' (' . $subingredientesLb . ')';
+                    // comprobamos si se ha añadido algun ingrediente y si es así lo añadimos la lista de subingredientes entre paréntesis al ingrediente principal
+                    if (!empty($subingredientesLb)) {
+                        $ingredientesLb .= ' (' . $subingredientesLb . ')';
+                    }
                 }
             }
         }
