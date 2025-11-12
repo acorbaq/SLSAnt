@@ -317,8 +317,8 @@ final class ImprimirController
                     }
                 }
             }
+            $ingredientesLb .= '.';
         }
-        $ingredientesLb .= '.';
         // Limpiar ingredientes
         $alergenosPresentes = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($idIngredientes);
         $alergenosLb = '';
@@ -486,10 +486,10 @@ final class ImprimirController
                     $ingredientesLb .= $subingredienteNombre;
                 }
             }
+            $ingredientesLb .= '.';
         }
-        $ingredientesLb .= '.';
 
-        // Alergenos
+        // Alérgenos
         $alergenosPresentes = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($idIngredientes);
         $alergenosLb = '';
         if (!empty($alergenosPresentes)) {
