@@ -83,17 +83,7 @@ final class Lotes
         // Validar parent_lote_id: si viene y no existe en la tabla lotes, lo dejamos a null
         $parentId = null;
         if (isset($lote['parent_lote_id']) && $lote['parent_lote_id'] !== '' && $lote['parent_lote_id'] !== null) {
-            $candidate = (int)$lote['parent_lote_id'];
-            $chk = $this->pdo->prepare("SELECT id FROM lotes WHERE id = :id LIMIT 1");
-            $chk->execute(['id' => $candidate]);
-            $exists = $chk->fetch(PDO::FETCH_ASSOC);
-            if ($exists) {
-                $parentId = $candidate;
-            } else {
-                // Si prefieres lanzar excepción en vez de ignorar, reemplaza la siguiente línea por throw
-                // throw new \InvalidArgumentException("parent_lote_id {$candidate} no existe.");
-                $parentId = null;
-            }
+            $parentId = (int)$lote['parent_lote_id'];
         }
 
         // 3) Insertar el nuevo lote en la base de datos

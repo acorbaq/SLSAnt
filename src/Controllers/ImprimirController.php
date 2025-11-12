@@ -242,6 +242,8 @@ final class ImprimirController
         // 2. Creamos las variables que necesitamos para la impresión
         // lista de elementos de la etiqueta: nombre elaboración, lista de ingredientes ordenada por peso y con * en los productos que incluyan alergenos,
         // lista de alergenos (únicos) presentes en los ingredientes, fecha de elaboración, fecha de caducidad, lote, tipo.
+        // Comprobar si existe parent_lote_id y asignarlo como lote a imprimir
+        $loteCodigo = $lote['parent_lote_id'] ?? $lote['numero_lote'] ?? '';
 
         $nombreLb = $elaboradoLote['nombre'] ?? '';
         if (!$nombreLb) {
@@ -373,7 +375,7 @@ final class ImprimirController
             'conservacionLb' => $conservacionLb,
             'fechaElaboracion' => $fechaElab ?? '',
             'fechaCaducidad' => $fechaCad ?? '',
-            'loteCodigo' => $lote['numero_lote'] ?? '',
+            'loteCodigo' => $loteCodigo ?? '',
             'tipoElaboracion' => $elaboradoLote['tipo'] ?? '',
             'cantidad' => $cantidad,
         ];
@@ -453,6 +455,9 @@ final class ImprimirController
             echo json_encode($rsp);
             exit;
         }
+        // Comprobar si existe parent_lote_id y asignarlo como lote a imprimir
+        $loteCodigo = $lote['parent_lote_id'] ?? $lote['numero_lote'] ?? '';
+
 
         // Ingredientes: para el ingrediente, si es un elaborado, obtener sus subingredientes; sino, vacío o el propio
         $ingredientesLb = '';
@@ -541,7 +546,7 @@ final class ImprimirController
             'conservacionLb' => $conservacionLb,
             'fechaElaboracion' => $fechaElab ?? '',
             'fechaCaducidad' => $fechaCad ?? '',
-            'loteCodigo' => $lote['numero_lote'] ?? '',
+            'loteCodigo' => $loteCodigo ?? '',
             'tipoElaboracion' => 2, // Escandallo
             'cantidad' => $cantidad,
         ];
