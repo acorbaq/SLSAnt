@@ -9,6 +9,7 @@ class TraductorEZPL
     // Obtener registro sanitario desde .env o usar valor por defecto
     private const DEFAULT_REGISTRO = 'RSX-0001-0001';
 
+
     public static function generateEZPL(array $data, int $copies = 1, int $daysValid = 2): string
     {
         $registro = trim((string)($_ENV['REGISTRO_SANITARIO'] ?? $_SERVER['REGISTRO_SANITARIO'] ?? getenv('REGISTRO_SANITARIO') ?: ''));
@@ -24,6 +25,8 @@ class TraductorEZPL
         $lote         = trim($data['loteCodigo'] ?? $data['lote'] ?? '');
         $fechaCad     = $data['fechaCaducidad'] ?? self::computeExpiryDate($daysToUse);
         $conservacion = trim($data['conservacionLb'] ?? $data['conservacion'] ?? 'CONSERVAR EN UN LUGAR FRESCO Y SECO');
+        $tipoElaboracion = intval($data['tipoElaboracion'] ?? 1); // 1: Elaboración, 2: Escandallo, 3: Envasado, 4: Congelado
+        $fechaElaboracion = trim($data['fechaElaboracion'] ?? '');
 
         $ezpl = "";
         $ezpl .= "^XSETCUT,DOUBLECUT,0\n";
@@ -61,18 +64,22 @@ class TraductorEZPL
         if ($alergenos !== '' && $predicted_alergenos_y > 350) {
             $headerY = 215;
         }
+        // Si no hay ingredientes, no mostrar el encabezado ni nada
+        if (count($ing_lines) > 0) {
+            $ezpl .= "AA,162,{$headerY},1,1,0,0E,INGREDIENTES\n";
 
-        $ezpl .= "AA,162,{$headerY},1,1,0,0E,INGREDIENTES\n";
-
-        $y = $headerY + 25;
-        foreach ($ing_lines as $line) {
-            $clean = trim($line);
-            if ($clean === '') {
+            $y = $headerY + 25;
+            foreach ($ing_lines as $line) {
+                $clean = trim($line);
+                if ($clean === '') {
+                    $y += 16;
+                    continue;
+                }
+                $ezpl .= "AA,10,{$y},1,1,0,0E," . addslashes($clean) . "\n";
                 $y += 16;
-                continue;
             }
-            $ezpl .= "AA,10,{$y},1,1,0,0E," . addslashes($clean) . "\n";
-            $y += 16;
+        } else {
+            $y = $headerY;
         }
 
         if ($alergenos !== '') {
@@ -89,8 +96,34 @@ class TraductorEZPL
             $y += 16;
         }
 
-        $ezpl .= "AA,10,380,1,1,0,0E,Consumir preferentemente antes del\n";
-        $ezpl .= "AB,90,400,1,1,0,0E," . addslashes($fechaCad) . "\n";
+        // Ajustes por tipo de elaboración
+        switch ($tipoElaboracion) {
+            case 1: // Elaboración
+                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de caducidad:\n";
+                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                break;
+            case 2: // Escandallo
+                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de caducidad:\n";
+                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                break;
+            case 3: // Envasado
+                $ezpl .= "AA,10,385,1,1,0,0E,Fecha de envasado:\n";
+                $ezpl .= "AA,160,385,1,1,0,0E," . addslashes($fechaElaboracion) . "\n";
+                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de caducidad:\n";
+                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                break;
+            case 4: // Congelado
+                $ezpl .= "AA,10,385,1,1,0,0E,Fecha de congelado:\n";
+                $ezpl .= "AA,160,385,1,1,0,0E," . addslashes($fechaElaboracion) . "\n";
+                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de consumo preferente:\n";
+                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                break;
+            default:
+                // Por defecto, como elaboración
+                $ezpl .= "AA,10,380,1,1,0,0E,Consumir preferentemente antes del\n";
+                $ezpl .= "AB,90,400,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                break;
+        }
 
         if ($lote !== '') {
             $ezpl .= "AA,350,380,1,1,0,0E,Lote\n";
@@ -106,9 +139,9 @@ class TraductorEZPL
             $ezpl .= "AB," . $loteX . ",400,1,1,0,0E," . addslashes($lote) . "\n";
         }
 
-        $ezpl .= "AA,146,435,1,1,0,0E," . addslashes($registro) . "\n";
+        $ezpl .= "AA,146,435,1,1,0,0E,Reg Nº " . addslashes($registro) . "\n";
         $ezpl .= "E\n";
-
+ 
         return $ezpl;
     }
 
