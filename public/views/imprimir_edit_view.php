@@ -208,18 +208,18 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                                                     <form method="post" action="/imprimir.php" class="inline-flex items-center gap-2">
                                                         <input type="hidden" name="action" value="imprimirIngrediente">
                                                         <input type="hidden" name="lote_id" value="<?= esc($lote['id'] ?? '0') ?>">
-                                                        <input type="hidden" name="ingrediente_id" value="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '0') ?>">
+                                                        <input type="hidden" name="ingrediente_id" value="<?= esc($ing['ingrediente_id'] ?? '0') ?>">
                                                         <input type="hidden" name="csrf" value="<?= esc($csrfToken ?? '') ?>">
 
-                                                        <label for="cantidad_ing_<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? 'x') ?>" class="sr-only">Cantidad</label>
-                                                       <input id="cantidad_ing_<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? 'x') ?>"
+                                                        <label for="cantidad_ing_<?= esc($ing['ingrediente_id'] ?? 'x') ?>" class="sr-only">Cantidad</label>
+                                                       <input id="cantidad_ing_<?= esc($ing['ingrediente_id'] ?? 'x') ?>"
                                                            name="cantidad" type="number" min="1" value="1"
                                                            class="w-16 text-sm px-2 py-1 border rounded" />
 
                                                         <button type="submit"
                                                                 class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
                                                                 data-action="print-ingrediente"
-                                                                data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
+                                                                data-ingrediente-id="<?= esc($ing['ingrediente_id'] ?? '') ?>"
                                                                 data-ingrediente-nombre="<?= esc($ingNombre) ?>"
                                                                 title="Imprimir etiqueta del ingrediente">
                                                             Imprimir
@@ -279,13 +279,13 @@ $show_individual_print_buttons = isset($show_individual_print_buttons) ? (bool)$
                                         <form method="post" action="/imprimir.php" class="inline-flex items-center gap-2">
                                             <input type="hidden" name="action" value="imprimirIngrediente">
                                             <input type="hidden" name="lote_id" value="<?= esc($lote['id'] ?? '0') ?>">
-                                            <input type="hidden" name="ingrediente_id" value="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '0') ?>">
+                                            <input type="hidden" name="ingrediente_id" value="<?= esc($ing['ingrediente_id'] ?? '0') ?>">
                                             <input type="hidden" name="csrf" value="<?= esc($csrfToken ?? '') ?>">
                                             <input type="hidden" name="cantidad" value="1" />
                                             <button type="submit"
                                                     class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500 focus:outline-none"
                                                     data-action="print-ingrediente"
-                                                    data-ingrediente-id="<?= esc($ing['id'] ?? $ing['ingrediente_id'] ?? '') ?>"
+                                                    data-ingrediente-id="<?= esc($ing['ingrediente_id'] ?? '') ?>"
                                                     data-ingrediente-nombre="<?= esc($ingNombre) ?>"
                                                     title="Imprimir etiqueta del ingrediente">
                                                 Imprimir
