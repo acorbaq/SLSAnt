@@ -65,6 +65,32 @@ final class ImprimirController
                 ]);
                 
                 $this->imprimirLote((int)$loteId, $cantidad);
+            } elseif ($action === 'imprimirIngrediente') {
+                // ✅ Validar entrada
+                if (!is_numeric($loteId) || (int)$loteId <= 0) {
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'ID de lote inválido.'
+                    ]);
+                    exit;
+                }
+                
+                $ingredienteId = $_POST['ingrediente_id'] ?? null;
+                if (!is_numeric($ingredienteId) || (int)$ingredienteId <= 0) {
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'ID de ingrediente inválido.'
+                    ]);
+                    exit;
+                }
+                
+                $cantidad = filter_input(INPUT_POST, 'cantidad', FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1, 'max_range' => 100, 'default' => 1]
+                ]);
+                
+                $this->imprimirIngrediente((int)$loteId, (int)$ingredienteId, $cantidad);
             }
             return;
         }
@@ -373,4 +399,174 @@ final class ImprimirController
         Redirect::to($url);
         exit;
     }
+// Lógica de impresión del ingrediente (para escandallos)
+    private function imprimirIngrediente(int $loteId, int $ingredienteId, int $cantidad): void
+    {
+        // ✅ Validar permisos
+        if (!$this->canModify()) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'No tiene permisos para imprimir etiquetas.'
+            ]);
+            exit;
+        }
+
+        // preparamos una variable de respuesta
+        $rsp = [
+            'success' => false,
+            'message' => '',
+        ];
+
+        // 1. obtenemos el lote completo
+        $lote = $this->lotesModel->getLoteById($loteId);
+        if (!$lote) {
+            http_response_code(404);
+            $rsp['message'] = 'Lote no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+
+        // 2. obtenemos el ingrediente
+        $ingrediente = $this->ingredienteModel->findById($this->pdo, $ingredienteId);
+        if (!$ingrediente) {
+            http_response_code(404);
+            $rsp['message'] = 'Ingrediente no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+
+        // 3. obtenemos el elaborado del lote
+        $elaboradoLote = $this->elaboradoModel->findById((int)$lote['elaboracion_id']);
+        if (!$elaboradoLote) {
+            http_response_code(404);
+            $rsp['message'] = 'Elaborado del lote no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+
+        // 4. Preparar datos para la etiqueta del ingrediente
+        $nombreLb = $ingrediente['nombre'] ?? 'Ingrediente #' . $ingredienteId;
+        if (!$nombreLb) {
+            http_response_code(404);
+            $rsp['message'] = 'Nombre de ingrediente no encontrado.';
+            echo json_encode($rsp);
+            exit;
+        }
+
+        // Ingredientes: para el ingrediente, si es un elaborado, obtener sus subingredientes; sino, vacío o el propio
+        $ingredientesLb = '';
+        $idIngredientes = [$ingredienteId];
+        $idElaboradoSubingrediente = $this->elaboradoModel->getElaboradoIdByIngredienteOrigen($ingredienteId);
+        if ($idElaboradoSubingrediente) {
+            $subingredientes = $this->elaboradoModel->getIngredienteElaborado((int)$idElaboradoSubingrediente);
+            if (!empty($subingredientes)) {
+                usort($subingredientes, function ($a, $b) {
+                    return ($b['peso'] ?? 0) <=> ($a['peso'] ?? 0);
+                });
+                foreach ($subingredientes as $si) {
+                    $subingredienteId = (int)($si['ingrediente_id'] ?? $si['id_ingrediente'] ?? 0);
+                    if ($this->elaboradoModel->isIngredienteOrigen((int)$idElaboradoSubingrediente, $subingredienteId)) {
+                        continue;
+                    }
+                    $idIngredientes[] = $subingredienteId;
+                    $subalergenos = $this->ingredienteModel->obtenerAlergenosPorIngredienteId($this->pdo, $subingredienteId);
+                    $subingredienteNombre = $si['nombre'] ?? 'Ingrediente #' . $subingredienteId;
+                    if (!empty($subalergenos)) {
+                        $subingredienteNombre .= '*';
+                    }
+                    if ($ingredientesLb !== '') {
+                        $ingredientesLb .= ', ';
+                    }
+                    $ingredientesLb .= $subingredienteNombre;
+                }
+            }
+        }
+        $ingredientesLb .= '.';
+
+        // Alergenos
+        $alergenosPresentes = $this->ingredienteModel->getUniqueAlergenosFromIngredientes($idIngredientes);
+        $alergenosLb = '';
+        if (!empty($alergenosPresentes)) {
+            foreach ($alergenosPresentes as &$alergeno) {
+                $alergenoNombres = $this->ingredienteModel->obtenerNombreAlergenosPorIdAlergeno((int)$alergeno);
+                if (!empty($alergenoNombres)) {
+                    $alergeno = $alergenoNombres[0];
+                } else {
+                    $alergeno = 'Alergeno #' . $alergeno;
+                }
+            }
+            $alergenosLb = implode(', ', $alergenosPresentes);
+            $alergenosLb .= '.';
+        }
+
+        $conservacionLb = $elaboradoLote['descripcion'] ?? 'CONSERVAR EN UN LUGAR FRESCO Y SECO';
+
+        // Fechas del lote principal
+        $fechaElabRaw = $lote['fecha_produccion'] ?? null;
+        $fechaElab = null;
+        if ($fechaElabRaw) {
+            try {
+                if (is_numeric($fechaElabRaw)) {
+                    $dt = (new \DateTime())->setTimestamp((int)$fechaElabRaw);
+                } else {
+                    $dt = new \DateTime($fechaElabRaw);
+                }
+                $fechaElab = $dt->format('d/m/Y');
+            } catch (\Exception $e) {
+                $fechaElab = (string)$fechaElabRaw;
+            }
+        }
+
+        $fechaCadRaw = $lote['fecha_caducidad'] ?? null;
+        $fechaCad = null;
+        if ($fechaCadRaw) {
+            try {
+                if (is_numeric($fechaCadRaw)) {
+                    $dt = (new \DateTime())->setTimestamp((int)$fechaCadRaw);
+                } else {
+                    $dt = new \DateTime($fechaCadRaw);
+                }
+                $fechaCad = $dt->format('d/m/Y');
+            } catch (\Exception $e) {
+                $fechaCad = (string)$fechaCadRaw;
+            }
+        }
+
+        // Preparar datos para la vista de impresión
+        $viewData = [
+            'nombreLb' => $nombreLb,
+            'ingredientesLb' => $ingredientesLb,
+            'alergenosLb' => $alergenosLb,
+            'conservacionLb' => $conservacionLb,
+            'fechaElaboracion' => $fechaElab ?? '',
+            'fechaCaducidad' => $fechaCad ?? '',
+            'loteCodigo' => $lote['numero_lote'] ?? '',
+            'tipoElaboracion' => 2, // Escandallo
+            'cantidad' => $cantidad,
+        ];
+
+        // Intentar generar EZPL y enviar a impresora
+        try {
+            $ezpl = TraductorEZPL::generateEZPL($viewData, (int)$cantidad);
+            // ver $ezpl en /tmp/preview_etiqueta.ezpl
+            echo $ezpl;
+            // guardar preview en tmp
+            @file_put_contents(sys_get_temp_dir() . '/preview_etiqueta.ezpl', $ezpl);
+            // enviar a impresora (nombre de cola por defecto 'godex_raw', cámbialo si hace falta)
+            $printed = PrinterUtil::printEzpl($ezpl, 'godex_raw');
+
+            $rsp['success'] = $printed;
+            $rsp['message'] = $printed ? 'Impresión enviada correctamente.' : 'Error al enviar a la impresora. Revisa /tmp/print_debug.log';
+        } catch (\Throwable $e) {
+            $rsp['success'] = false;
+            $rsp['message'] = 'Excepción al generar/imprimir: ' . $e->getMessage();
+        }
+
+        // volver a la vista del lote/impresion
+        $url = '/imprimir.php?view=1&id=' . urlencode((string)$loteId);
+        Redirect::to($url);
+        exit;
+    }
+
 }
