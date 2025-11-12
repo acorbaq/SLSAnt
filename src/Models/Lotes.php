@@ -84,6 +84,15 @@ final class Lotes
         $parentId = null;
         if (isset($lote['parent_lote_id']) && $lote['parent_lote_id'] !== '' && $lote['parent_lote_id'] !== null) {
             $parentId = (int)$lote['parent_lote_id'];
+            // Verificar si el numero de lote corresponde a un lote existente where numero_lote = parent_lote_id
+            // Si corresponde obtener su id
+            $chkParent = $this->pdo->prepare("SELECT id FROM lotes WHERE numero_lote = :id LIMIT 1");
+            $chkParent->execute(['id' => $parentId]);
+            if (!$chkParent->fetch(PDO::FETCH_ASSOC)) {
+                // Asignar el nuevoNumeroLote como parent_lote_id
+                $nuevoNumeroLote = $parentId;
+                $parentId = null; // Si no existe, setear a null
+            }
         }
 
         // 3) Insertar el nuevo lote en la base de datos
