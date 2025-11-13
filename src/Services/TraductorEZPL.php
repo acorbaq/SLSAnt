@@ -10,6 +10,7 @@ class TraductorEZPL
     private const DEFAULT_REGISTRO = 'RSX-0001-0001';
 
 
+    
     public static function generateEZPL(array $data, int $copies = 1, int $daysValid = 2): string
     {
         $registro = trim((string)($_ENV['REGISTRO_SANITARIO'] ?? $_SERVER['REGISTRO_SANITARIO'] ?? getenv('REGISTRO_SANITARIO') ?: ''));
@@ -19,14 +20,14 @@ class TraductorEZPL
         $daysFromData = isset($data['days_valid']) ? intval($data['days_valid']) : null;
         $daysToUse = $daysFromData !== null ? $daysFromData : $daysValid;
 
-        $producto     = strtoupper(trim($data['nombreLb'] ?? $data['producto'] ?? ''));
-        $ingredientes = trim($data['ingredientesLb'] ?? $data['ingredientes'] ?? '');
-        $alergenos    = strtoupper(trim($data['alergenosLb'] ?? $data['alergenos'] ?? ''));
-        $lote         = trim($data['loteCodigo'] ?? $data['lote'] ?? '');
+        $producto     = strtoupper(trim((string)($data['nombreLb'] ?? $data['producto'] ?? '')));
+        $ingredientes = trim((string)($data['ingredientesLb'] ?? $data['ingredientes'] ?? ''));
+        $alergenos    = strtoupper(trim((string)($data['alergenosLb'] ?? $data['alergenos'] ?? '')));
+        $lote         = trim((string)($data['loteCodigo'] ?? $data['lote'] ?? ''));
         $fechaCad     = $data['fechaCaducidad'] ?? self::computeExpiryDate($daysToUse);
-        $conservacion = trim($data['conservacionLb'] ?? $data['conservacion'] ?? 'CONSERVAR EN UN LUGAR FRESCO Y SECO');
+        $conservacion = trim((string)($data['conservacionLb'] ?? $data['conservacion'] ?? 'CONSERVAR EN UN LUGAR FRESCO Y SECO'));
         $tipoElaboracion = intval($data['tipoElaboracion'] ?? 1); // 1: Elaboración, 2: Escandallo, 3: Envasado, 4: Congelado
-        $fechaElaboracion = trim($data['fechaElaboracion'] ?? '');
+        $fechaElaboracion = trim((string)($data['fechaElaboracion'] ?? ''));
 
         $ezpl = "";
         $ezpl .= "^XSETCUT,DOUBLECUT,0\n";
@@ -64,22 +65,18 @@ class TraductorEZPL
         if ($alergenos !== '' && $predicted_alergenos_y > 350) {
             $headerY = 215;
         }
-        // Si no hay ingredientes, no mostrar el encabezado ni nada
-        if (count($ing_lines) > 0) {
-            $ezpl .= "AA,162,{$headerY},1,1,0,0E,INGREDIENTES\n";
 
-            $y = $headerY + 25;
-            foreach ($ing_lines as $line) {
-                $clean = trim($line);
-                if ($clean === '') {
-                    $y += 16;
-                    continue;
-                }
-                $ezpl .= "AA,10,{$y},1,1,0,0E," . addslashes($clean) . "\n";
+        $ezpl .= "AA,162,{$headerY},1,1,0,0E,INGREDIENTES\n";
+
+        $y = $headerY + 25;
+        foreach ($ing_lines as $line) {
+            $clean = trim($line);
+            if ($clean === '') {
                 $y += 16;
+                continue;
             }
-        } else {
-            $y = $headerY;
+            $ezpl .= "AA,10,{$y},1,1,0,0E," . addslashes($clean) . "\n";
+            $y += 16;
         }
 
         if ($alergenos !== '') {
@@ -99,12 +96,9 @@ class TraductorEZPL
         // Ajustes por tipo de elaboración
         switch ($tipoElaboracion) {
             case 1: // Elaboración
-                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de caducidad:\n";
-                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
-                break;
             case 2: // Escandallo
-                $ezpl .= "AA,10,405,1,1,0,0E,Fecha de caducidad:\n";
-                $ezpl .= "AA,160,405,1,1,0,0E," . addslashes($fechaCad) . "\n";
+                $ezpl .= "AA,10,380,1,1,0,0E,Consumir preferentemente antes del\n";
+                $ezpl .= "AB,90,400,1,1,0,0E," . addslashes($fechaCad) . "\n";
                 break;
             case 3: // Envasado
                 $ezpl .= "AA,10,385,1,1,0,0E,Fecha de envasado:\n";
