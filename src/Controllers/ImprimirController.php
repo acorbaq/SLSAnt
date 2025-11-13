@@ -562,8 +562,6 @@ final class ImprimirController
         // Intentar generar EZPL y enviar a impresora
         try {
             $ezpl = TraductorEZPL::generateEZPL($viewData, (int)$cantidad);
-            // ver $ezpl en /tmp/preview_etiqueta.ezpl
-            echo $ezpl;
             // guardar preview en tmp
             @file_put_contents(sys_get_temp_dir() . '/preview_etiqueta.ezpl', $ezpl);
             // enviar a impresora (nombre de cola por defecto 'godex_raw', cámbialo si hace falta)
