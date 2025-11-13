@@ -20,7 +20,11 @@ final class Printer
             @mkdir($projectTmp, 0755, true);
         }
 
-        $tmpfile = $tmpfile ?? tempnam($projectTmp, 'etq_') . '.ezpl';
+        if ($tmpfile === null) {
+            $tmpfileBase = tempnam($projectTmp, 'etq_');
+            unlink($tmpfileBase);
+            $tmpfile = $tmpfileBase . '.ezpl';
+        }
         $logPath = $projectTmp . '/print_debug.log';
 
         $w = @file_put_contents($tmpfile, $ezpl, LOCK_EX);
