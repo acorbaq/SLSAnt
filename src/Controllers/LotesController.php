@@ -165,14 +165,27 @@ final class LotesController
         $ultimoLote = $this->lotesModel->obtenerLotePorIdElaboracion((int)$postData['elaboracion_id']);
         $numeroUltimoLote = $ultimoLote ? (int)$ultimoLote['numero_lote'] : 0;
 
-        // Determinar si heredar lote o generar nuevo
-        $parentLoteId = $postData['parent_lote_id'] !== '' ? (string)$postData['parent_lote_id'] : null;
-        if (in_array($tipoElaboracion, [2, 3, 4], true) && $parentLoteId !== null) {
+        // Si exsite parent_lote_id en el postdata comprobar si hay un lote con ese numero_lote
+        $parentLoteId = null;
+        if (isset($postData['parent_lote_id']) && $postData['parent_lote_id'] !== '') {
+            $chkLote = $this->lotesModel->getLoteByNumeroLote($postData['parent_lote_id']);
+            if ($chkLote) {
+                $parentLoteId = $chkLote['id'];
+            }
+        }
+
+        if (in_array($tipoElaboracion, [2, 3, 4], true)) {
             // Para escandallo (2), congelación (4), envasado (3): heredar el lote del padre
-            $nuevoNumeroLote = $parentLoteId;
+            // Si parent_lote_id es nulo asignamos nuevo nuemro de lote parentLoteId
+            if ($parentLoteId === null) {
+                $nuevoNumeroLote = $postData['parent_lote_id'];
+            } else {
+                $nuevoNumeroLote = $chkLote['numero_lote'];
+            }
+            error_log("Nuevo número de lote heredado: " . $nuevoNumeroLote);
         } else {
-            // Para elaboración (1) u otros: generar nuevo lote
-            $nuevoNumeroLote = $this->lotesModel->generarNumeroLote($numeroUltimoLote, (int)$postData['elaboracion_id']);
+            // Para elaboración (1) u otros: dejar vacío para que el modelo genere
+            $nuevoNumeroLote = null;
         }
 
         $loteData = [

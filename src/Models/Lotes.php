@@ -75,23 +75,23 @@ final class Lotes
             throw new \InvalidArgumentException('El valor de "ingredientes" debe ser un array');
         }
 
-        // Obtener último número de lote para esta elaboración y generar el nuevo número
+        // Obtener último número de lote para esta elaboración
         $ultimo = $this->obtenerLotePorIdElaboracion((int)($lote['elaboracion_id'] ?? 0));
         $ultimoNumero = $ultimo['numero_lote'] ?? '';
-        $nuevoNumeroLote = $this->generarNumeroLote($ultimoNumero, (int)$lote['elaboracion_id']);
+        // Usar numero_lote si viene (heredado), sino generar nuevo
+        $nuevoNumeroLote = $lote['numero_lote'] ?? $this->generarNumeroLote($ultimoNumero, (int)$lote['elaboracion_id']);
 
-        // Validar parent_lote_id: si viene y no existe en la tabla lotes, lo dejamos a null
+        // Validar parent_lote_id: si viene y no existe en la tabla lotes, generar nuevo lote y setear parent a null
         $parentId = null;
         if (isset($lote['parent_lote_id']) && $lote['parent_lote_id'] !== '' && $lote['parent_lote_id'] !== null) {
             $parentId = (int)$lote['parent_lote_id'];
-            // Verificar si el numero de lote corresponde a un lote existente where numero_lote = parent_lote_id
-            // Si corresponde obtener su id
-            $chkParent = $this->pdo->prepare("SELECT id FROM lotes WHERE numero_lote = :id LIMIT 1");
+            // Verificar si el lote padre existe por su ID
+            $chkParent = $this->pdo->prepare("SELECT id FROM lotes WHERE id = :id LIMIT 1");
             $chkParent->execute(['id' => $parentId]);
             if (!$chkParent->fetch(PDO::FETCH_ASSOC)) {
-                // Asignar el nuevoNumeroLote como parent_lote_id
-                $nuevoNumeroLote = $parentId;
-                $parentId = null; // Si no existe, setear a null
+                // Si no existe, generar nuevo lote y setear parent a null
+                $nuevoNumeroLote = $this->generarNumeroLote($ultimoNumero, (int)$lote['elaboracion_id']);
+                $parentId = null;
             }
         }
 
@@ -278,5 +278,13 @@ final class Lotes
         $stmt = $this->pdo->prepare("SELECT * FROM lotes_ingredientes WHERE lote_elaboracion_id = :lote_elaboracion_id");
         $stmt->execute(['lote_elaboracion_id' => $loteId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    // Metodo para obtener un lote por su numero_lote
+    public function getLoteByNumeroLote(string $numeroLote): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM lotes WHERE numero_lote = :numero_lote LIMIT 1");
+        $stmt->execute(['numero_lote' => $numeroLote]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 }
