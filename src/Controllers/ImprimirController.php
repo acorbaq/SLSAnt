@@ -238,12 +238,20 @@ final class ImprimirController
                     $loteIngredientes = $this->elaboradoModel->getIngredienteElaborado((int)$loteIdSublotes);
                 }
             }
+            // Si no existe ningún ingrediente es debido a que el elaborado es un envasado/congelado de otro elaborado previo
+            // en ese caso hacemos uso del valor parent_lote_id para obtener los ingredientes del lote padre
+            if (isset($lote['parent_lote_id'])) {
+                $lotePadre = $this->lotesModel->getLoteById((int)$lote['parent_lote_id']);
+                if ($lotePadre) {
+                    $loteIngredientes = $this->lotesModel->getIngredientesByLoteId((int)$lotePadre['id']);
+                }
+            }
         }
         // 2. Creamos las variables que necesitamos para la impresión
         // lista de elementos de la etiqueta: nombre elaboración, lista de ingredientes ordenada por peso y con * en los productos que incluyan alergenos,
         // lista de alergenos (únicos) presentes en los ingredientes, fecha de elaboración, fecha de caducidad, lote, tipo.
         // Comprobar si existe parent_lote_id y asignarlo como lote a imprimir
-        $loteCodigo = $lote['parent_lote_id'] ?? $lote['numero_lote'] ?? '';
+        $loteCodigo = $lote['numero_lote'] ?? '';
 
         $nombreLb = $elaboradoLote['nombre'] ?? '';
         if (!$nombreLb) {
@@ -456,7 +464,7 @@ final class ImprimirController
             exit;
         }
         // Comprobar si existe parent_lote_id y asignarlo como lote a imprimir
-        $loteCodigo = $lote['parent_lote_id'] ?? $lote['numero_lote'] ?? '';
+        $loteCodigo = $lote['numero_lote'] ?? '';
 
 
         // Ingredientes: para el ingrediente, si es un elaborado, obtener sus subingredientes; sino, vacío o el propio
